@@ -14,17 +14,20 @@ html, body {
   user-select: none;
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
+  touch-action: none;
 }
+body.mode-grid { touch-action: auto; }
 
 #photo {
   position: fixed;
   top: 0; left: 0;
   width: 100%; height: 100%;
   object-fit: contain;
-  transition: opacity 0.12s ease;
+  will-change: transform, opacity;
 }
-
 #photo.loading { opacity: 0; }
+#photo.fly { transition: transform 0.28s ease-out, opacity 0.28s ease-out; }
+#photo.snap { transition: transform 0.2s ease-out; }
 
 #spinner {
   position: fixed;
@@ -39,12 +42,8 @@ html, body {
   transition: opacity 0.2s ease;
   pointer-events: none;
 }
-
 #spinner.visible { opacity: 1; }
-
-@keyframes spin {
-  to { transform: translate(-50%, -50%) rotate(360deg); }
-}
+@keyframes spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
 
 #counter {
   position: fixed;
@@ -53,59 +52,205 @@ html, body {
   font: 11px/1 -apple-system, system-ui, sans-serif;
   letter-spacing: 0.02em;
   pointer-events: none;
+  z-index: 30;
 }
 
-.nav-zone {
+.indicator {
   position: fixed;
-  top: 0; bottom: 0;
-  width: 50%;
-  z-index: 10;
-  cursor: pointer;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  font: bold 42px/1 -apple-system, system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 20;
+  transition: opacity 0.35s ease;
 }
-.nav-prev { left: 0; cursor: w-resize; }
-.nav-next { right: 0; cursor: e-resize; }
+#ind-like { color: #4ecdc4; }
+#ind-nope { color: #ff6b6b; }
 
-#error-msg {
+#overlay {
   position: fixed;
   inset: 0;
   display: none;
   align-items: center;
   justify-content: center;
+  flex-direction: column;
+  gap: 12px;
   color: #555;
   font: 14px/1.5 -apple-system, system-ui, sans-serif;
   text-align: center;
   padding: 2rem;
+  z-index: 40;
+}
+#overlay a {
+  color: #777;
+  text-decoration: none;
+  cursor: pointer;
+  padding: 6px 0;
+  transition: color 0.15s;
+}
+#overlay a:hover { color: #bbb; }
+#overlay .done-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+#overlay .done-actions a { border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px; }
+#overlay .done-actions a:last-child { border: none; }
+#overlay .done-actions a.disabled { color: #333; pointer-events: none; }
+
+/* ── Grid view ────────────────────────────────────────────── */
+
+#grid-view {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  display: none;
+  flex-direction: column;
+  z-index: 50;
+}
+#grid-view.active { display: flex; }
+
+#grid-bar {
+  display: flex;
+  align-items: center;
+  padding: 14px 16px;
+  color: rgba(255,255,255,0.4);
+  font: 12px/1 -apple-system, system-ui, sans-serif;
+  flex-shrink: 0;
+  gap: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+#grid-bar a {
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+#grid-bar a:hover { color: #fff; }
+#grid-title { color: rgba(255,255,255,0.6); }
+#grid-spacer { flex: 1; }
+
+#grid {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 3px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 3px;
+  align-content: start;
+}
+@media (min-width: 600px) {
+  #grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 4px; padding: 4px; }
+}
+
+.grid-item {
+  position: relative;
+  aspect-ratio: 3/2;
+  cursor: pointer;
+  overflow: hidden;
+  background: #111;
+}
+.grid-item img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: opacity 0.2s;
+}
+.grid-item:active img { opacity: 0.7; }
+.grid-item.removing {
+  opacity: 0;
+  transform: scale(0.85);
+  transition: all 0.25s ease-out;
+  pointer-events: none;
+}
+
+.grid-toggle {
+  position: absolute;
+  bottom: 6px; right: 6px;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.grid-item:hover .grid-toggle { opacity: 1; }
+@media (hover: none) { .grid-toggle { opacity: 0.6; } }
+
+.grid-toggle.demote { background: rgba(255,80,80,0.75); color: #fff; }
+.grid-toggle.promote { background: rgba(78,205,196,0.75); color: #fff; }
+
+#grid-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: #444;
+  font: 13px/2 -apple-system, system-ui, sans-serif;
+  padding: 3rem;
 }
 </style>
 </head>
 <body>
 
-<img id="photo" alt="">
+<img id="photo" draggable="false" alt="">
 <div id="spinner"></div>
 <div id="counter"></div>
-<div class="nav-zone nav-prev" id="nav-prev"></div>
-<div class="nav-zone nav-next" id="nav-next"></div>
-<div id="error-msg"></div>
+<div id="ind-like" class="indicator">LIKE</div>
+<div id="ind-nope" class="indicator">NOPE</div>
+<div id="overlay"></div>
+
+<div id="grid-view">
+  <div id="grid-bar">
+    <a id="grid-back">&larr; Back</a>
+    <span id="grid-title"></span>
+    <span id="grid-spacer"></span>
+    <span id="grid-count"></span>
+  </div>
+  <div id="grid"></div>
+</div>
 
 <script>
 (function () {
   'use strict';
 
+  var SWIPE_THRESHOLD = 80;
+  var TAP_THRESHOLD = 12;
+  var STORAGE_KEY = 'logjam_decisions';
+
+  // Modes: 'loading', 'select', 'done', 'grid', 'review'
   var state = {
+    mode: 'loading',
+    allImages: [],
     images: [],
     index: 0,
-    folder: null
+    folder: null,
+    decisions: {},
+    animating: false,
+    reviewFilter: null,
+    reviewImages: []
   };
 
   var el = {
     photo: document.getElementById('photo'),
     spinner: document.getElementById('spinner'),
     counter: document.getElementById('counter'),
-    error: document.getElementById('error-msg')
+    overlay: document.getElementById('overlay'),
+    indLike: document.getElementById('ind-like'),
+    indNope: document.getElementById('ind-nope'),
+    gridView: document.getElementById('grid-view'),
+    gridBar: document.getElementById('grid-bar'),
+    grid: document.getElementById('grid'),
+    gridTitle: document.getElementById('grid-title'),
+    gridCount: document.getElementById('grid-count')
   };
 
   var preloaded = {};
   var spinnerTimer = null;
+  var flashTimer = null;
 
   var FALLBACK_IMAGES = [
     "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300004.jpg",
@@ -147,9 +292,49 @@ html, body {
     "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300040.jpg"
   ];
 
-  // ── Image loading ──────────────────────────────────────────────
+  // ── Decisions (localStorage) ───────────────────────────────────
 
-  function loadImages(folder) {
+  function storageKey() {
+    return STORAGE_KEY + (state.folder ? '_' + state.folder : '');
+  }
+
+  function loadDecisions() {
+    try {
+      state.decisions = JSON.parse(localStorage.getItem(storageKey())) || {};
+    } catch (_) { state.decisions = {}; }
+    var n = Object.keys(state.decisions).length;
+    if (n) console.log('[logjam] loaded', n, 'previous decisions');
+  }
+
+  function saveDecisions() {
+    try { localStorage.setItem(storageKey(), JSON.stringify(state.decisions)); } catch (_) {}
+  }
+
+  function countByVerdict(v) {
+    var n = 0;
+    for (var k in state.decisions) if (state.decisions[k] === v) n++;
+    return n;
+  }
+
+  function imagesByVerdict(v) {
+    return state.allImages.filter(function (url) { return state.decisions[url] === v; });
+  }
+
+  function filterUndecided() {
+    state.images = state.allImages.filter(function (url) { return !state.decisions[url]; });
+  }
+
+  function resetDecisions() {
+    state.decisions = {};
+    saveDecisions();
+    filterUndecided();
+    state.index = 0;
+    enterSelect();
+  }
+
+  // ── Image source loading ───────────────────────────────────────
+
+  function loadImageList(folder) {
     if (folder) {
       console.log('[logjam] loading from API, folder:', folder);
       return fetch('/api/images?folder=' + encodeURIComponent(folder))
@@ -188,13 +373,17 @@ html, body {
       });
   }
 
-  // ── Display ────────────────────────────────────────────────────
+  // ── Display (shared by select & review) ────────────────────────
 
   function show(i) {
+    if (!state.images.length) return;
     var len = state.images.length;
     state.index = ((i % len) + len) % len;
     var url = state.images[state.index];
 
+    el.photo.style.transform = '';
+    el.photo.style.opacity = '';
+    el.photo.classList.remove('fly', 'snap');
     updateCounter();
 
     var cached = preloaded[url];
@@ -205,15 +394,15 @@ html, body {
       scheduleSpinner();
       var img = preload(url);
       img.onload = function () {
-        if (state.images[state.index] === url) applyImage(url);
+        if (state.images.length && state.images[state.index] === url) applyImage(url);
       };
       img.onerror = function () {
-        if (state.images.length > 1) next();
+        if (state.images.length > 1) nav(1);
       };
     }
 
-    preload(state.images[wrap(state.index + 1)]);
-    preload(state.images[wrap(state.index - 1)]);
+    if (state.images.length > 1) preload(state.images[wrap(state.index + 1)]);
+    if (state.images.length > 2) preload(state.images[wrap(state.index - 1)]);
   }
 
   function applyImage(url) {
@@ -234,14 +423,20 @@ html, body {
   function scheduleSpinner() {
     clearTimeout(spinnerTimer);
     spinnerTimer = setTimeout(function () {
-      if (el.photo.classList.contains('loading')) {
-        el.spinner.classList.add('visible');
-      }
+      if (el.photo.classList.contains('loading')) el.spinner.classList.add('visible');
     }, 250);
   }
 
   function updateCounter() {
-    el.counter.textContent = (state.index + 1) + ' / ' + state.images.length;
+    if (state.mode === 'select') {
+      var liked = countByVerdict('like');
+      var parts = [(state.index + 1) + '/' + state.images.length + ' remaining'];
+      if (liked) parts.push(liked + ' liked');
+      el.counter.textContent = parts.join(' \u00b7 ');
+    } else if (state.mode === 'review') {
+      var label = state.reviewFilter === 'like' ? 'liked' : 'passed';
+      el.counter.textContent = (state.index + 1) + '/' + state.images.length + ' ' + label;
+    }
   }
 
   function wrap(i) {
@@ -249,75 +444,385 @@ html, body {
     return ((i % len) + len) % len;
   }
 
+  // ── Selection (Tinder mode) ────────────────────────────────────
+
+  function decide(verdict) {
+    if (state.animating || !state.images.length) return;
+    var url = state.images[state.index];
+    state.decisions[url] = verdict;
+    saveDecisions();
+    console.log('[logjam]', verdict, ':', url.split('/').pop());
+    flyAway(verdict === 'like' ? -1 : 1);
+  }
+
+  function flyAway(dirY) {
+    state.animating = true;
+    el.photo.classList.add('fly');
+    el.photo.style.transform = 'translateY(' + (dirY * window.innerHeight) + 'px)';
+    el.photo.style.opacity = '0';
+
+    setTimeout(function () {
+      el.photo.classList.remove('fly');
+      state.animating = false;
+      state.images.splice(state.index, 1);
+      if (!state.images.length) { enterDone(); return; }
+      if (state.index >= state.images.length) state.index = 0;
+      show(state.index);
+    }, 280);
+  }
+
+  // ── Reclassify (review mode) ───────────────────────────────────
+
+  function reclassify(verdict) {
+    if (state.animating || !state.images.length) return;
+    var url = state.images[state.index];
+    if (state.decisions[url] === verdict) return;
+    state.decisions[url] = verdict;
+    saveDecisions();
+    console.log('[logjam] reclassified to', verdict, ':', url.split('/').pop());
+    flashIndicator(verdict);
+  }
+
+  function flashIndicator(verdict) {
+    var ind = verdict === 'like' ? el.indLike : el.indNope;
+    var other = verdict === 'like' ? el.indNope : el.indLike;
+    clearTimeout(flashTimer);
+    other.style.opacity = '0';
+    ind.style.opacity = '1';
+    flashTimer = setTimeout(function () { ind.style.opacity = '0'; }, 500);
+  }
+
   // ── Navigation ─────────────────────────────────────────────────
 
-  function next() { show(state.index + 1); }
-  function prev() { show(state.index - 1); }
+  function nav(dir) {
+    if (!state.animating && state.images.length) show(state.index + dir);
+  }
 
   // ── Fullscreen ─────────────────────────────────────────────────
 
   function toggleFullscreen() {
     if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-      var el = document.documentElement;
-      (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+      var root = document.documentElement;
+      (root.requestFullscreen || root.webkitRequestFullscreen).call(root);
     } else {
       (document.exitFullscreen || document.webkitExitFullscreen).call(document);
     }
   }
 
+  // ── Mode transitions ───────────────────────────────────────────
+
+  function hideAll() {
+    el.photo.style.display = 'none';
+    el.photo.style.transform = '';
+    el.photo.style.opacity = '';
+    el.spinner.classList.remove('visible');
+    el.overlay.style.display = 'none';
+    el.gridView.classList.remove('active');
+    el.counter.textContent = '';
+    el.indLike.style.opacity = '0';
+    el.indNope.style.opacity = '0';
+    document.body.classList.remove('mode-grid');
+  }
+
+  function enterSelect() {
+    hideAll();
+    state.mode = 'select';
+    filterUndecided();
+    if (!state.images.length) { enterDone(); return; }
+    state.index = 0;
+    el.photo.style.display = '';
+    show(0);
+    console.log('[logjam] select mode,', state.images.length, 'remaining');
+  }
+
+  function enterDone() {
+    hideAll();
+    state.mode = 'done';
+    var liked = countByVerdict('like');
+    var disliked = countByVerdict('dislike');
+    var total = state.allImages.length;
+
+    var html = '<div style="color:#666">All ' + total + ' images reviewed</div>';
+    html += '<div style="color:#4ecdc4">' + liked + ' liked</div>';
+    html += '<div style="color:#ff6b6b;margin-bottom:4px">' + disliked + ' passed</div>';
+    html += '<div class="done-actions">';
+    html += '<a id="btn-liked" class="' + (liked ? '' : 'disabled') + '">View liked (' + liked + ')</a>';
+    html += '<a id="btn-passed" class="' + (disliked ? '' : 'disabled') + '">View passed (' + disliked + ')</a>';
+    html += '<a id="btn-reset">Start over</a>';
+    html += '</div>';
+
+    el.overlay.innerHTML = html;
+    el.overlay.style.display = 'flex';
+
+    document.getElementById('btn-liked').addEventListener('click', function () { enterGrid('like'); });
+    document.getElementById('btn-passed').addEventListener('click', function () { enterGrid('dislike'); });
+    document.getElementById('btn-reset').addEventListener('click', resetDecisions);
+    console.log('[logjam] done — liked:', liked, 'passed:', disliked);
+  }
+
+  function enterGrid(filter) {
+    hideAll();
+    state.mode = 'grid';
+    state.reviewFilter = filter;
+    document.body.classList.add('mode-grid');
+    el.gridView.classList.add('active');
+    buildGrid(filter);
+    console.log('[logjam] grid mode, filter:', filter);
+  }
+
+  function exitGrid() {
+    enterDone();
+  }
+
+  function enterReview(images, index) {
+    hideAll();
+    state.mode = 'review';
+    state.images = images.slice();
+    state.reviewImages = images.slice();
+    state.index = index;
+    el.photo.style.display = '';
+    show(index);
+    console.log('[logjam] review mode,', images.length, 'images');
+  }
+
+  function exitReview() {
+    enterGrid(state.reviewFilter);
+  }
+
+  // ── Grid ───────────────────────────────────────────────────────
+
+  function buildGrid(filter) {
+    var imgs = imagesByVerdict(filter);
+    state.reviewImages = imgs;
+    var label = filter === 'like' ? 'Liked' : 'Passed';
+    el.gridTitle.textContent = label;
+    el.gridCount.textContent = imgs.length + ' images';
+
+    el.grid.innerHTML = '';
+
+    if (!imgs.length) {
+      el.grid.innerHTML = '<div id="grid-empty">No images</div>';
+      return;
+    }
+
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i < imgs.length; i++) {
+      var item = document.createElement('div');
+      item.className = 'grid-item';
+      item.dataset.url = imgs[i];
+      item.dataset.idx = i;
+
+      var img = document.createElement('img');
+      img.src = imgs[i];
+      img.loading = 'lazy';
+      img.draggable = false;
+      img.alt = '';
+      item.appendChild(img);
+
+      var toggle = document.createElement('div');
+      toggle.className = 'grid-toggle ' + (filter === 'like' ? 'demote' : 'promote');
+      toggle.dataset.url = imgs[i];
+      toggle.textContent = filter === 'like' ? '\u2715' : '\u2665';
+      item.appendChild(toggle);
+
+      frag.appendChild(item);
+    }
+    el.grid.appendChild(frag);
+    el.grid.scrollTop = 0;
+  }
+
+  function gridReclassify(url, itemEl) {
+    var newVerdict = state.reviewFilter === 'like' ? 'dislike' : 'like';
+    state.decisions[url] = newVerdict;
+    saveDecisions();
+    console.log('[logjam] grid reclassified to', newVerdict, ':', url.split('/').pop());
+
+    itemEl.classList.add('removing');
+    setTimeout(function () {
+      itemEl.remove();
+      var remaining = el.grid.querySelectorAll('.grid-item:not(.removing)');
+      el.gridCount.textContent = remaining.length + ' images';
+      state.reviewImages = imagesByVerdict(state.reviewFilter);
+      if (!remaining.length) {
+        el.grid.innerHTML = '<div id="grid-empty">No images</div>';
+      }
+    }, 250);
+  }
+
+  // ── Drag / swipe ───────────────────────────────────────────────
+
+  var drag = { active: false, startX: 0, startY: 0, dx: 0, dy: 0 };
+
+  function ptrDown(x, y) {
+    if (state.mode !== 'select' && state.mode !== 'review') return;
+    if (state.animating) return;
+    drag.active = true;
+    drag.startX = x;
+    drag.startY = y;
+    drag.dx = 0;
+    drag.dy = 0;
+    el.photo.classList.remove('fly', 'snap');
+  }
+
+  function ptrMove(x, y) {
+    if (!drag.active) return;
+    drag.dx = x - drag.startX;
+    drag.dy = y - drag.startY;
+    el.photo.style.transform = 'translate(' + drag.dx + 'px,' + drag.dy + 'px)';
+
+    var progress = Math.min(Math.abs(drag.dy) / SWIPE_THRESHOLD, 1);
+    if (drag.dy < -TAP_THRESHOLD) {
+      el.indLike.style.opacity = progress;
+      el.indNope.style.opacity = '0';
+    } else if (drag.dy > TAP_THRESHOLD) {
+      el.indNope.style.opacity = progress;
+      el.indLike.style.opacity = '0';
+    } else {
+      el.indLike.style.opacity = '0';
+      el.indNope.style.opacity = '0';
+    }
+  }
+
+  function ptrUp(x) {
+    if (!drag.active) return;
+    drag.active = false;
+    el.indLike.style.opacity = '0';
+    el.indNope.style.opacity = '0';
+
+    var ax = Math.abs(drag.dx);
+    var ay = Math.abs(drag.dy);
+
+    if (ax < TAP_THRESHOLD && ay < TAP_THRESHOLD) {
+      el.photo.style.transform = '';
+      x > window.innerWidth / 2 ? nav(1) : nav(-1);
+      return;
+    }
+
+    if (ay > ax && ay > SWIPE_THRESHOLD) {
+      var verdict = drag.dy < 0 ? 'like' : 'dislike';
+      if (state.mode === 'select') {
+        decide(verdict);
+      } else {
+        reclassify(verdict);
+        el.photo.classList.add('snap');
+        el.photo.style.transform = '';
+        setTimeout(function () { el.photo.classList.remove('snap'); }, 200);
+      }
+      return;
+    }
+
+    if (ax > ay && ax > SWIPE_THRESHOLD) {
+      el.photo.style.transform = '';
+      drag.dx < 0 ? nav(1) : nav(-1);
+      return;
+    }
+
+    el.photo.classList.add('snap');
+    el.photo.style.transform = '';
+    setTimeout(function () { el.photo.classList.remove('snap'); }, 200);
+  }
+
   // ── Events ─────────────────────────────────────────────────────
 
   function bindEvents() {
-    document.getElementById('nav-next').addEventListener('click', next);
-    document.getElementById('nav-prev').addEventListener('click', prev);
+    document.addEventListener('touchstart', function (e) {
+      if (state.mode === 'grid') return;
+      ptrDown(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: true });
+    document.addEventListener('touchmove', function (e) {
+      if (state.mode === 'grid') return;
+      if (drag.active) e.preventDefault();
+      ptrMove(e.touches[0].clientX, e.touches[0].clientY);
+    }, { passive: false });
+    document.addEventListener('touchend', function (e) {
+      if (state.mode === 'grid') return;
+      ptrUp(e.changedTouches[0].clientX);
+    }, { passive: true });
 
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
-      if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
-      if (e.key === ' ') { e.preventDefault(); toggleFullscreen(); }
+    document.addEventListener('mousedown', function (e) {
+      if (state.mode === 'grid') return;
+      ptrDown(e.clientX, e.clientY);
+    });
+    document.addEventListener('mousemove', function (e) {
+      if (state.mode === 'grid') return;
+      ptrMove(e.clientX, e.clientY);
+    });
+    document.addEventListener('mouseup', function (e) {
+      if (state.mode === 'grid') return;
+      ptrUp(e.clientX);
     });
 
-    var touchStartX = 0;
-    var touchStartY = 0;
-    document.addEventListener('touchstart', function (e) {
-      touchStartX = e.touches[0].clientX;
-      touchStartY = e.touches[0].clientY;
-    }, { passive: true });
+    document.addEventListener('keydown', function (e) {
+      if (state.animating) return;
 
-    document.addEventListener('touchend', function (e) {
-      var dx = e.changedTouches[0].clientX - touchStartX;
-      var dy = e.changedTouches[0].clientY - touchStartY;
-
-      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
-        dx < 0 ? next() : prev();
+      if (state.mode === 'select') {
+        switch (e.key) {
+          case 'ArrowRight': e.preventDefault(); nav(1); break;
+          case 'ArrowLeft':  e.preventDefault(); nav(-1); break;
+          case 'ArrowUp':    e.preventDefault(); decide('like'); break;
+          case 'ArrowDown':  e.preventDefault(); decide('dislike'); break;
+          case ' ':          e.preventDefault(); toggleFullscreen(); break;
+        }
+      } else if (state.mode === 'review') {
+        switch (e.key) {
+          case 'ArrowRight': e.preventDefault(); nav(1); break;
+          case 'ArrowLeft':  e.preventDefault(); nav(-1); break;
+          case 'ArrowUp':    e.preventDefault(); reclassify('like'); break;
+          case 'ArrowDown':  e.preventDefault(); reclassify('dislike'); break;
+          case 'Escape':     e.preventDefault(); exitReview(); break;
+          case ' ':          e.preventDefault(); toggleFullscreen(); break;
+        }
+      } else if (state.mode === 'grid') {
+        if (e.key === 'Escape') { e.preventDefault(); exitGrid(); }
       }
-    }, { passive: true });
-  }
+    });
 
-  // ── Error ──────────────────────────────────────────────────────
+    document.getElementById('grid-back').addEventListener('click', exitGrid);
 
-  function showError(msg) {
-    el.error.textContent = msg;
-    el.error.style.display = 'flex';
+    el.grid.addEventListener('click', function (e) {
+      var toggle = e.target.closest('.grid-toggle');
+      if (toggle) {
+        e.stopPropagation();
+        var url = toggle.dataset.url;
+        var item = toggle.closest('.grid-item');
+        gridReclassify(url, item);
+        return;
+      }
+      var item = e.target.closest('.grid-item');
+      if (item && !item.classList.contains('removing')) {
+        var url = item.dataset.url;
+        var imgs = state.reviewImages;
+        var idx = imgs.indexOf(url);
+        if (idx >= 0) enterReview(imgs, idx);
+      }
+    });
   }
 
   // ── Init ───────────────────────────────────────────────────────
 
+  function showError(msg) {
+    el.overlay.textContent = msg;
+    el.overlay.style.display = 'flex';
+  }
+
   function init() {
     var params = new URLSearchParams(location.search);
     state.folder = params.get('folder') || null;
+    loadDecisions();
+    bindEvents();
 
-    loadImages(state.folder)
+    loadImageList(state.folder)
       .then(function (images) {
         if (!images || !images.length) {
-          console.error('[logjam] no images returned from any source');
+          console.error('[logjam] no images from any source');
           showError('No images found.');
           return;
         }
-        console.log('[logjam] loaded', images.length, 'images, starting viewer');
-        state.images = images;
-        show(0);
-        bindEvents();
+        state.allImages = images;
+        filterUndecided();
+        console.log('[logjam]', images.length, 'total,', state.images.length, 'remaining');
+        if (!state.images.length) { enterDone(); return; }
+        enterSelect();
       })
       .catch(function (err) {
         console.error('[logjam] init failed:', err);
@@ -325,13 +830,16 @@ html, body {
       });
   }
 
-  // ── Public API for future extensions ───────────────────────────
+  // ── Public API ─────────────────────────────────────────────────
 
   window.logjam = {
     state: state,
-    next: next,
-    prev: prev,
+    nav: nav,
     show: show,
+    decide: decide,
+    reclassify: reclassify,
+    reset: resetDecisions,
+    enterGrid: enterGrid,
     reload: init
   };
 
