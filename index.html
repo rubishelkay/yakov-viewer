@@ -15,8 +15,11 @@ html, body {
   -webkit-user-select: none;
   -webkit-tap-highlight-color: transparent;
   touch-action: none;
+  font-family: -apple-system, system-ui, sans-serif;
 }
-body.mode-grid { touch-action: auto; }
+body.mode-scroll { touch-action: auto; }
+
+/* ── Viewer ───────────────────────────────────────────────── */
 
 #photo {
   position: fixed;
@@ -69,6 +72,8 @@ body.mode-grid { touch-action: auto; }
 #ind-like { color: #4ecdc4; }
 #ind-nope { color: #ff6b6b; }
 
+/* ── Overlay (done / error) ───────────────────────────────── */
+
 #overlay {
   position: fixed;
   inset: 0;
@@ -76,7 +81,7 @@ body.mode-grid { touch-action: auto; }
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
   color: #555;
   font: 14px/1.5 -apple-system, system-ui, sans-serif;
   text-align: center;
@@ -87,14 +92,57 @@ body.mode-grid { touch-action: auto; }
   color: #777;
   text-decoration: none;
   cursor: pointer;
-  padding: 6px 0;
+  padding: 4px 0;
   transition: color 0.15s;
 }
 #overlay a:hover { color: #bbb; }
-#overlay .done-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
-#overlay .done-actions a { border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px; }
-#overlay .done-actions a:last-child { border: none; }
-#overlay .done-actions a.disabled { color: #333; pointer-events: none; }
+.done-actions { display: flex; flex-direction: column; gap: 6px; margin-top: 16px; }
+.done-actions a { font-size: 14px; }
+.done-back { margin-top: 24px; font-size: 12px !important; color: #444 !important; }
+
+/* ── Films list ───────────────────────────────────────────── */
+
+#films-view {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  display: none;
+  flex-direction: column;
+  z-index: 50;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+#films-view.active { display: flex; }
+
+#films-header {
+  padding: 48px 24px 8px;
+  color: rgba(255,255,255,0.5);
+  font: 300 22px/1.2 -apple-system, system-ui, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+#films-list { padding: 8px 24px 48px; }
+
+.film-card {
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  cursor: pointer;
+  transition: opacity 0.12s;
+}
+.film-card:active { opacity: 0.5; }
+.film-card:last-child { border: none; }
+
+.film-title { color: rgba(255,255,255,0.8); font-size: 15px; line-height: 1.3; }
+.film-meta { margin-top: 5px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.film-tag {
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.35);
+  padding: 2px 7px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+.film-progress { color: rgba(255,255,255,0.2); font-size: 11px; }
+.film-liked { color: #4ecdc4; }
 
 /* ── Grid view ────────────────────────────────────────────── */
 
@@ -111,40 +159,53 @@ body.mode-grid { touch-action: auto; }
 #grid-bar {
   display: flex;
   align-items: center;
-  padding: 14px 16px;
+  padding: 12px 16px;
   color: rgba(255,255,255,0.4);
-  font: 12px/1 -apple-system, system-ui, sans-serif;
+  font-size: 12px;
   flex-shrink: 0;
-  gap: 12px;
+  gap: 10px;
   border-bottom: 1px solid rgba(255,255,255,0.06);
 }
 #grid-bar a {
-  color: rgba(255,255,255,0.5);
+  color: rgba(255,255,255,0.4);
   cursor: pointer;
   text-decoration: none;
   transition: color 0.15s;
 }
 #grid-bar a:hover { color: #fff; }
-#grid-title { color: rgba(255,255,255,0.6); }
-#grid-spacer { flex: 1; }
+#grid-title { color: rgba(255,255,255,0.55); white-space: nowrap; }
+
+#grid-tabs { display: flex; gap: 2px; margin-left: auto; }
+.grid-tab {
+  color: rgba(255,255,255,0.25);
+  cursor: pointer;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  transition: all 0.12s;
+  white-space: nowrap;
+}
+.grid-tab:hover { color: rgba(255,255,255,0.5); }
+.grid-tab.active { color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.08); }
 
 #grid {
   flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 3px;
+  padding: 1px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 3px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
   align-content: start;
 }
-@media (min-width: 600px) {
-  #grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 4px; padding: 4px; }
-}
+@media (min-width: 500px)  { #grid { grid-template-columns: repeat(4, 1fr); } }
+@media (min-width: 768px)  { #grid { grid-template-columns: repeat(5, 1fr); } }
+@media (min-width: 1024px) { #grid { grid-template-columns: repeat(6, 1fr); } }
+@media (min-width: 1400px) { #grid { grid-template-columns: repeat(7, 1fr); } }
 
 .grid-item {
   position: relative;
-  aspect-ratio: 3/2;
+  aspect-ratio: 1/1;
   cursor: pointer;
   overflow: hidden;
   background: #111;
@@ -153,45 +214,95 @@ body.mode-grid { touch-action: auto; }
   width: 100%; height: 100%;
   object-fit: cover;
   display: block;
-  transition: opacity 0.2s;
+  transition: transform 0.15s ease, opacity 0.15s ease;
 }
-.grid-item:active img { opacity: 0.7; }
-.grid-item.removing {
-  opacity: 0;
-  transform: scale(0.85);
-  transition: all 0.25s ease-out;
-  pointer-events: none;
-}
-
-.grid-toggle {
-  position: absolute;
-  bottom: 6px; right: 6px;
-  width: 26px; height: 26px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  line-height: 1;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s;
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-}
-.grid-item:hover .grid-toggle { opacity: 1; }
-@media (hover: none) { .grid-toggle { opacity: 0.6; } }
-
-.grid-toggle.demote { background: rgba(255,80,80,0.75); color: #fff; }
-.grid-toggle.promote { background: rgba(78,205,196,0.75); color: #fff; }
+@media (hover: hover) { .grid-item:hover img { transform: scale(1.04); } }
+.grid-item:active img { opacity: 0.6; }
 
 #grid-empty {
   grid-column: 1 / -1;
   text-align: center;
-  color: #444;
-  font: 13px/2 -apple-system, system-ui, sans-serif;
+  color: #333;
+  font-size: 13px;
   padding: 3rem;
 }
+
+/* ── Detail panel (review mode) ───────────────────────────── */
+
+#detail-back {
+  position: fixed;
+  top: 14px; left: 14px;
+  color: rgba(255,255,255,0.5);
+  font-size: 22px;
+  cursor: pointer;
+  z-index: 62;
+  display: none;
+  line-height: 1;
+  padding: 4px;
+  transition: opacity 0.3s, color 0.15s;
+}
+#detail-back:hover { color: #fff; }
+
+#detail-panel {
+  position: fixed;
+  bottom: 16px; left: 16px;
+  display: none;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-radius: 10px;
+  z-index: 62;
+  transition: opacity 0.3s;
+}
+
+#detail-back.hidden,
+#detail-panel.hidden { opacity: 0; pointer-events: none; }
+
+.dt-heart {
+  font-size: 22px;
+  cursor: pointer;
+  color: rgba(255,255,255,0.35);
+  transition: color 0.15s, transform 0.15s;
+  line-height: 1;
+}
+.dt-heart.active { color: #4ecdc4; }
+.dt-heart:active { transform: scale(1.25); }
+
+.dt-stars { display: flex; gap: 3px; }
+.dt-star {
+  font-size: 16px;
+  cursor: pointer;
+  color: rgba(255,255,255,0.15);
+  transition: color 0.1s;
+  line-height: 1;
+}
+.dt-star.filled { color: #f0c040; }
+@media (hover: hover) { .dt-star:hover { color: rgba(240,192,64,0.6); } }
+
+.dt-comment {
+  width: 120px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 5px;
+  color: rgba(255,255,255,0.7);
+  font: 11px/1.3 -apple-system, system-ui, sans-serif;
+  padding: 5px 8px;
+  outline: none;
+  user-select: text;
+  -webkit-user-select: text;
+  touch-action: auto;
+}
+.dt-comment::placeholder { color: rgba(255,255,255,0.15); }
+.dt-comment:focus {
+  background: rgba(255,255,255,0.12);
+  border-color: rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.9);
+  width: 180px;
+}
+@media (max-width: 400px) { .dt-comment { width: 80px; } .dt-comment:focus { width: 120px; } }
 </style>
 </head>
 <body>
@@ -203,12 +314,29 @@ body.mode-grid { touch-action: auto; }
 <div id="ind-nope" class="indicator">NOPE</div>
 <div id="overlay"></div>
 
+<a id="detail-back">&larr;</a>
+<div id="detail-panel">
+  <span class="dt-heart" id="dt-heart">&#9825;</span>
+  <div class="dt-stars" id="dt-stars">
+    <span class="dt-star" data-v="1">&#9733;</span>
+    <span class="dt-star" data-v="2">&#9733;</span>
+    <span class="dt-star" data-v="3">&#9733;</span>
+    <span class="dt-star" data-v="4">&#9733;</span>
+    <span class="dt-star" data-v="5">&#9733;</span>
+  </div>
+  <input class="dt-comment" id="dt-comment" type="text" placeholder="note..." maxlength="200">
+</div>
+
+<div id="films-view">
+  <div id="films-header">Logjamming</div>
+  <div id="films-list"></div>
+</div>
+
 <div id="grid-view">
   <div id="grid-bar">
-    <a id="grid-back">&larr; Back</a>
+    <a id="grid-back">&larr;</a>
     <span id="grid-title"></span>
-    <span id="grid-spacer"></span>
-    <span id="grid-count"></span>
+    <div id="grid-tabs"></div>
   </div>
   <div id="grid"></div>
 </div>
@@ -219,18 +347,19 @@ body.mode-grid { touch-action: auto; }
 
   var SWIPE_THRESHOLD = 80;
   var TAP_THRESHOLD = 12;
-  var STORAGE_KEY = 'logjam_decisions';
+  var AUTOHIDE_MS = 3500;
 
-  // Modes: 'loading', 'select', 'done', 'grid', 'review'
   var state = {
     mode: 'loading',
+    films: [],
+    film: null,
     allImages: [],
     images: [],
     index: 0,
     folder: null,
     decisions: {},
     animating: false,
-    reviewFilter: null,
+    reviewFilter: 'all',
     reviewImages: []
   };
 
@@ -241,16 +370,23 @@ body.mode-grid { touch-action: auto; }
     overlay: document.getElementById('overlay'),
     indLike: document.getElementById('ind-like'),
     indNope: document.getElementById('ind-nope'),
+    filmsView: document.getElementById('films-view'),
+    filmsList: document.getElementById('films-list'),
     gridView: document.getElementById('grid-view'),
-    gridBar: document.getElementById('grid-bar'),
     grid: document.getElementById('grid'),
     gridTitle: document.getElementById('grid-title'),
-    gridCount: document.getElementById('grid-count')
+    gridTabs: document.getElementById('grid-tabs'),
+    detailBack: document.getElementById('detail-back'),
+    detailPanel: document.getElementById('detail-panel'),
+    dtHeart: document.getElementById('dt-heart'),
+    dtStars: document.getElementById('dt-stars'),
+    dtComment: document.getElementById('dt-comment')
   };
 
   var preloaded = {};
   var spinnerTimer = null;
   var flashTimer = null;
+  var autoHideTimer = null;
 
   var FALLBACK_IMAGES = [
     "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300004.jpg",
@@ -292,88 +428,106 @@ body.mode-grid { touch-action: auto; }
     "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300040.jpg"
   ];
 
-  // ── Decisions (localStorage) ───────────────────────────────────
+  // ── Data helpers ───────────────────────────────────────────────
+  // Format: { liked: bool, rating: 1-5|null, comment: string }
+
+  function getD(url) {
+    var d = state.decisions[url];
+    if (!d) return null;
+    if (typeof d === 'string') {
+      d = { liked: d === 'like', rating: null, comment: '' };
+      state.decisions[url] = d;
+    }
+    return d;
+  }
+
+  function setD(url, patch) {
+    var d = getD(url) || { liked: false, rating: null, comment: '' };
+    for (var k in patch) d[k] = patch[k];
+    state.decisions[url] = d;
+    saveDecisions();
+    return d;
+  }
 
   function storageKey() {
-    return STORAGE_KEY + (state.folder ? '_' + state.folder : '');
+    if (state.film) return 'logjam_film_' + state.film.id;
+    return 'logjam_decisions' + (state.folder ? '_' + state.folder : '');
   }
 
   function loadDecisions() {
-    try {
-      state.decisions = JSON.parse(localStorage.getItem(storageKey())) || {};
-    } catch (_) { state.decisions = {}; }
-    var n = Object.keys(state.decisions).length;
-    if (n) console.log('[logjam] loaded', n, 'previous decisions');
+    try { state.decisions = JSON.parse(localStorage.getItem(storageKey())) || {}; }
+    catch (_) { state.decisions = {}; }
+    for (var k in state.decisions) getD(k);
   }
 
   function saveDecisions() {
     try { localStorage.setItem(storageKey(), JSON.stringify(state.decisions)); } catch (_) {}
   }
 
+  function peekDecisions(filmId) {
+    try {
+      var raw = JSON.parse(localStorage.getItem('logjam_film_' + filmId)) || {};
+      var liked = 0, total = 0;
+      for (var k in raw) {
+        total++;
+        var v = raw[k];
+        if ((typeof v === 'string' && v === 'like') || (v && v.liked)) liked++;
+      }
+      return { reviewed: total, liked: liked };
+    } catch (_) { return { reviewed: 0, liked: 0 }; }
+  }
+
   function countByVerdict(v) {
     var n = 0;
-    for (var k in state.decisions) if (state.decisions[k] === v) n++;
+    for (var k in state.decisions) {
+      var d = getD(k);
+      if (!d) continue;
+      if (v === 'like' && d.liked) n++;
+      else if (v === 'dislike' && !d.liked) n++;
+    }
     return n;
   }
 
   function imagesByVerdict(v) {
-    return state.allImages.filter(function (url) { return state.decisions[url] === v; });
+    return state.allImages.filter(function (u) {
+      var d = getD(u);
+      if (!d) return false;
+      if (v === 'all') return true;
+      return v === 'like' ? d.liked : !d.liked;
+    });
   }
 
   function filterUndecided() {
-    state.images = state.allImages.filter(function (url) { return !state.decisions[url]; });
+    state.images = state.allImages.filter(function (u) { return !state.decisions[u]; });
   }
 
-  function resetDecisions() {
-    state.decisions = {};
-    saveDecisions();
-    filterUndecided();
-    state.index = 0;
-    enterSelect();
-  }
+  // ── Data loading ───────────────────────────────────────────────
 
-  // ── Image source loading ───────────────────────────────────────
+  function loadFilms() {
+    return fetch('films.json')
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (d) { return d.films || []; })
+      .catch(function () { return []; });
+  }
 
   function loadImageList(folder) {
     if (folder) {
-      console.log('[logjam] loading from API, folder:', folder);
       return fetch('/api/images?folder=' + encodeURIComponent(folder))
-        .then(function (r) {
-          if (!r.ok) throw new Error('API returned ' + r.status);
-          return r.json();
-        })
-        .then(function (d) {
-          var imgs = d.images || [];
-          console.log('[logjam] API returned', imgs.length, 'images');
-          return imgs;
-        })
-        .catch(function (err) {
-          console.warn('[logjam] API failed:', err.message, '— trying images.json');
-          return fetchJson();
-        });
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(function (d) { return d.images || []; })
+        .catch(function () { return fetchImagesJson(); });
     }
-    return fetchJson();
+    return fetchImagesJson();
   }
 
-  function fetchJson() {
-    console.log('[logjam] loading from images.json');
+  function fetchImagesJson() {
     return fetch('images.json')
-      .then(function (r) {
-        if (!r.ok) throw new Error('images.json returned ' + r.status);
-        return r.json();
-      })
-      .then(function (d) {
-        var imgs = d.images || d;
-        console.log('[logjam] images.json returned', imgs.length, 'images');
-        return imgs;
-      })
-      .catch(function (err) {
-        console.warn('[logjam] images.json failed:', err.message, '— using fallback');
-        return FALLBACK_IMAGES;
-      });
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (d) { return d.images || d; })
+      .catch(function () { return FALLBACK_IMAGES; });
   }
 
-  // ── Display (shared by select & review) ────────────────────────
+  // ── Display ────────────────────────────────────────────────────
 
   function show(i) {
     if (!state.images.length) return;
@@ -396,13 +550,13 @@ body.mode-grid { touch-action: auto; }
       img.onload = function () {
         if (state.images.length && state.images[state.index] === url) applyImage(url);
       };
-      img.onerror = function () {
-        if (state.images.length > 1) nav(1);
-      };
+      img.onerror = function () { if (state.images.length > 1) nav(1); };
     }
 
     if (state.images.length > 1) preload(state.images[wrap(state.index + 1)]);
     if (state.images.length > 2) preload(state.images[wrap(state.index - 1)]);
+
+    if (state.mode === 'review') syncDetail();
   }
 
   function applyImage(url) {
@@ -430,12 +584,11 @@ body.mode-grid { touch-action: auto; }
   function updateCounter() {
     if (state.mode === 'select') {
       var liked = countByVerdict('like');
-      var parts = [(state.index + 1) + '/' + state.images.length + ' remaining'];
-      if (liked) parts.push(liked + ' liked');
-      el.counter.textContent = parts.join(' \u00b7 ');
+      var t = (state.index + 1) + '/' + state.images.length + ' remaining';
+      el.counter.textContent = liked ? t + ' \u00b7 ' + liked + ' liked' : t;
     } else if (state.mode === 'review') {
-      var label = state.reviewFilter === 'like' ? 'liked' : 'passed';
-      el.counter.textContent = (state.index + 1) + '/' + state.images.length + ' ' + label;
+      var labels = { all: '', like: 'liked', dislike: 'passed' };
+      el.counter.textContent = (state.index + 1) + '/' + state.images.length + ' ' + (labels[state.reviewFilter] || '');
     }
   }
 
@@ -444,14 +597,12 @@ body.mode-grid { touch-action: auto; }
     return ((i % len) + len) % len;
   }
 
-  // ── Selection (Tinder mode) ────────────────────────────────────
+  // ── Selection (Tinder) ─────────────────────────────────────────
 
   function decide(verdict) {
     if (state.animating || !state.images.length) return;
     var url = state.images[state.index];
-    state.decisions[url] = verdict;
-    saveDecisions();
-    console.log('[logjam]', verdict, ':', url.split('/').pop());
+    setD(url, { liked: verdict === 'like' });
     flyAway(verdict === 'like' ? -1 : 1);
   }
 
@@ -460,7 +611,6 @@ body.mode-grid { touch-action: auto; }
     el.photo.classList.add('fly');
     el.photo.style.transform = 'translateY(' + (dirY * window.innerHeight) + 'px)';
     el.photo.style.opacity = '0';
-
     setTimeout(function () {
       el.photo.classList.remove('fly');
       state.animating = false;
@@ -471,16 +621,17 @@ body.mode-grid { touch-action: auto; }
     }, 280);
   }
 
-  // ── Reclassify (review mode) ───────────────────────────────────
+  // ── Reclassify (review swipe) ──────────────────────────────────
 
   function reclassify(verdict) {
     if (state.animating || !state.images.length) return;
     var url = state.images[state.index];
-    if (state.decisions[url] === verdict) return;
-    state.decisions[url] = verdict;
-    saveDecisions();
-    console.log('[logjam] reclassified to', verdict, ':', url.split('/').pop());
+    var d = getD(url);
+    var want = verdict === 'like';
+    if (d && d.liked === want) return;
+    setD(url, { liked: want });
     flashIndicator(verdict);
+    syncDetail();
   }
 
   function flashIndicator(verdict) {
@@ -498,15 +649,62 @@ body.mode-grid { touch-action: auto; }
     if (!state.animating && state.images.length) show(state.index + dir);
   }
 
-  // ── Fullscreen ─────────────────────────────────────────────────
-
   function toggleFullscreen() {
     if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-      var root = document.documentElement;
-      (root.requestFullscreen || root.webkitRequestFullscreen).call(root);
+      var r = document.documentElement;
+      (r.requestFullscreen || r.webkitRequestFullscreen).call(r);
     } else {
       (document.exitFullscreen || document.webkitExitFullscreen).call(document);
     }
+  }
+
+  // ── Detail panel (review mode) ─────────────────────────────────
+
+  function showDetail() {
+    el.detailBack.style.display = '';
+    el.detailPanel.style.display = 'flex';
+    syncDetail();
+    resetAutoHide();
+  }
+
+  function hideDetail() {
+    el.detailBack.style.display = 'none';
+    el.detailPanel.style.display = 'none';
+    clearTimeout(autoHideTimer);
+  }
+
+  function syncDetail() {
+    if (state.mode !== 'review' || !state.images.length) return;
+    var url = state.images[state.index];
+    var d = getD(url) || { liked: false, rating: null, comment: '' };
+
+    el.dtHeart.innerHTML = d.liked ? '&#9829;' : '&#9825;';
+    el.dtHeart.classList.toggle('active', d.liked);
+
+    var stars = el.dtStars.children;
+    for (var i = 0; i < stars.length; i++) {
+      stars[i].classList.toggle('filled', d.rating !== null && (i + 1) <= d.rating);
+    }
+
+    if (document.activeElement !== el.dtComment) {
+      el.dtComment.value = d.comment || '';
+    }
+  }
+
+  function resetAutoHide() {
+    el.detailBack.classList.remove('hidden');
+    el.detailPanel.classList.remove('hidden');
+    clearTimeout(autoHideTimer);
+    autoHideTimer = setTimeout(function () {
+      if (state.mode === 'review' && document.activeElement !== el.dtComment) {
+        el.detailBack.classList.add('hidden');
+        el.detailPanel.classList.add('hidden');
+      }
+    }, AUTOHIDE_MS);
+  }
+
+  function isOnPanel(target) {
+    return target.closest('#detail-panel') || target.closest('#detail-back');
   }
 
   // ── Mode transitions ───────────────────────────────────────────
@@ -517,11 +715,93 @@ body.mode-grid { touch-action: auto; }
     el.photo.style.opacity = '';
     el.spinner.classList.remove('visible');
     el.overlay.style.display = 'none';
+    el.filmsView.classList.remove('active');
     el.gridView.classList.remove('active');
     el.counter.textContent = '';
     el.indLike.style.opacity = '0';
     el.indNope.style.opacity = '0';
-    document.body.classList.remove('mode-grid');
+    document.body.classList.remove('mode-scroll');
+    hideDetail();
+  }
+
+  function filmTitle() {
+    return state.film ? state.film.title : 'Images';
+  }
+
+  // ── Films list ─────────────────────────────────────────────────
+
+  function enterFilms() {
+    hideAll();
+    state.mode = 'films';
+    document.body.classList.add('mode-scroll');
+    el.filmsView.classList.add('active');
+    buildFilmsList();
+  }
+
+  function buildFilmsList() {
+    el.filmsList.innerHTML = '';
+    if (!state.films.length) {
+      el.filmsList.innerHTML = '<div style="color:#333;padding:2rem">No films found.</div>';
+      return;
+    }
+    var frag = document.createDocumentFragment();
+    for (var i = 0; i < state.films.length; i++) {
+      var f = state.films[i];
+      var p = peekDecisions(f.id);
+      var card = document.createElement('div');
+      card.className = 'film-card';
+      card.dataset.idx = i;
+
+      var title = document.createElement('div');
+      title.className = 'film-title';
+      title.textContent = f.title;
+      card.appendChild(title);
+
+      var meta = document.createElement('div');
+      meta.className = 'film-meta';
+      if (f.tags) {
+        for (var t = 0; t < f.tags.length; t++) {
+          var tag = document.createElement('span');
+          tag.className = 'film-tag';
+          tag.textContent = f.tags[t];
+          meta.appendChild(tag);
+        }
+      }
+      if (p.reviewed) {
+        var prog = document.createElement('span');
+        prog.className = 'film-progress';
+        prog.innerHTML = p.reviewed + ' reviewed';
+        if (p.liked) prog.innerHTML += ' &middot; <span class="film-liked">' + p.liked + ' liked</span>';
+        meta.appendChild(prog);
+      }
+      card.appendChild(meta);
+      frag.appendChild(card);
+    }
+    el.filmsList.appendChild(frag);
+  }
+
+  function openFilm(film) {
+    state.film = film;
+    state.folder = film.folder;
+    loadDecisions();
+    loadImageList(film.folder).then(startViewer).catch(function () { showError('Failed to load images.'); });
+  }
+
+  function findFilm(id) {
+    for (var i = 0; i < state.films.length; i++) {
+      if (state.films[i].id === id) return state.films[i];
+    }
+    return null;
+  }
+
+  // ── Select / Done ──────────────────────────────────────────────
+
+  function startViewer(images) {
+    if (!images || !images.length) { showError('No images found.'); return; }
+    state.allImages = images;
+    filterUndecided();
+    if (!state.images.length) { enterDone(); return; }
+    enterSelect();
   }
 
   function enterSelect() {
@@ -532,121 +812,107 @@ body.mode-grid { touch-action: auto; }
     state.index = 0;
     el.photo.style.display = '';
     show(0);
-    console.log('[logjam] select mode,', state.images.length, 'remaining');
   }
 
   function enterDone() {
     hideAll();
     state.mode = 'done';
     var liked = countByVerdict('like');
-    var disliked = countByVerdict('dislike');
+    var passed = countByVerdict('dislike');
     var total = state.allImages.length;
 
-    var html = '<div style="color:#666">All ' + total + ' images reviewed</div>';
-    html += '<div style="color:#4ecdc4">' + liked + ' liked</div>';
-    html += '<div style="color:#ff6b6b;margin-bottom:4px">' + disliked + ' passed</div>';
-    html += '<div class="done-actions">';
-    html += '<a id="btn-liked" class="' + (liked ? '' : 'disabled') + '">View liked (' + liked + ')</a>';
-    html += '<a id="btn-passed" class="' + (disliked ? '' : 'disabled') + '">View passed (' + disliked + ')</a>';
-    html += '<a id="btn-reset">Start over</a>';
-    html += '</div>';
+    var h = '<div style="color:rgba(255,255,255,0.5);font-size:16px;margin-bottom:4px">' + filmTitle() + ' reviewed</div>';
+    h += '<div style="font-size:13px">';
+    h += '<span style="color:#4ecdc4">' + liked + ' liked</span>';
+    h += ' &middot; <span style="color:#ff6b6b">' + passed + ' passed</span>';
+    h += ' &middot; <span style="color:#444">' + total + ' total</span>';
+    h += '</div>';
+    h += '<div class="done-actions"><a id="btn-selections">View selections</a></div>';
+    if (state.films.length) h += '<a class="done-back" id="btn-back-films">&larr; Back to films</a>';
 
-    el.overlay.innerHTML = html;
+    el.overlay.innerHTML = h;
     el.overlay.style.display = 'flex';
-
-    document.getElementById('btn-liked').addEventListener('click', function () { enterGrid('like'); });
-    document.getElementById('btn-passed').addEventListener('click', function () { enterGrid('dislike'); });
-    document.getElementById('btn-reset').addEventListener('click', resetDecisions);
-    console.log('[logjam] done — liked:', liked, 'passed:', disliked);
-  }
-
-  function enterGrid(filter) {
-    hideAll();
-    state.mode = 'grid';
-    state.reviewFilter = filter;
-    document.body.classList.add('mode-grid');
-    el.gridView.classList.add('active');
-    buildGrid(filter);
-    console.log('[logjam] grid mode, filter:', filter);
-  }
-
-  function exitGrid() {
-    enterDone();
-  }
-
-  function enterReview(images, index) {
-    hideAll();
-    state.mode = 'review';
-    state.images = images.slice();
-    state.reviewImages = images.slice();
-    state.index = index;
-    el.photo.style.display = '';
-    show(index);
-    console.log('[logjam] review mode,', images.length, 'images');
-  }
-
-  function exitReview() {
-    enterGrid(state.reviewFilter);
+    document.getElementById('btn-selections').addEventListener('click', function () { enterGrid('all'); });
+    var bb = document.getElementById('btn-back-films');
+    if (bb) bb.addEventListener('click', enterFilms);
   }
 
   // ── Grid ───────────────────────────────────────────────────────
 
-  function buildGrid(filter) {
-    var imgs = imagesByVerdict(filter);
+  function enterGrid(filter) {
+    hideAll();
+    state.mode = 'grid';
+    state.reviewFilter = filter || 'all';
+    document.body.classList.add('mode-scroll');
+    el.gridView.classList.add('active');
+    el.gridTitle.textContent = filmTitle();
+    buildGridTabs();
+    buildGrid();
+  }
+
+  function buildGridTabs() {
+    var liked = countByVerdict('like');
+    var passed = countByVerdict('dislike');
+    var tabs = [
+      { key: 'all', label: 'All ' + (liked + passed) },
+      { key: 'like', label: 'Liked ' + liked },
+      { key: 'dislike', label: 'Passed ' + passed }
+    ];
+    el.gridTabs.innerHTML = '';
+    for (var i = 0; i < tabs.length; i++) {
+      var a = document.createElement('a');
+      a.className = 'grid-tab' + (tabs[i].key === state.reviewFilter ? ' active' : '');
+      a.dataset.filter = tabs[i].key;
+      a.textContent = tabs[i].label;
+      el.gridTabs.appendChild(a);
+    }
+  }
+
+  function buildGrid() {
+    var imgs = imagesByVerdict(state.reviewFilter);
     state.reviewImages = imgs;
-    var label = filter === 'like' ? 'Liked' : 'Passed';
-    el.gridTitle.textContent = label;
-    el.gridCount.textContent = imgs.length + ' images';
-
     el.grid.innerHTML = '';
-
     if (!imgs.length) {
       el.grid.innerHTML = '<div id="grid-empty">No images</div>';
       return;
     }
-
     var frag = document.createDocumentFragment();
     for (var i = 0; i < imgs.length; i++) {
       var item = document.createElement('div');
       item.className = 'grid-item';
       item.dataset.url = imgs[i];
       item.dataset.idx = i;
-
       var img = document.createElement('img');
       img.src = imgs[i];
       img.loading = 'lazy';
       img.draggable = false;
       img.alt = '';
       item.appendChild(img);
-
-      var toggle = document.createElement('div');
-      toggle.className = 'grid-toggle ' + (filter === 'like' ? 'demote' : 'promote');
-      toggle.dataset.url = imgs[i];
-      toggle.textContent = filter === 'like' ? '\u2715' : '\u2665';
-      item.appendChild(toggle);
-
       frag.appendChild(item);
     }
     el.grid.appendChild(frag);
     el.grid.scrollTop = 0;
   }
 
-  function gridReclassify(url, itemEl) {
-    var newVerdict = state.reviewFilter === 'like' ? 'dislike' : 'like';
-    state.decisions[url] = newVerdict;
-    saveDecisions();
-    console.log('[logjam] grid reclassified to', newVerdict, ':', url.split('/').pop());
+  function exitGrid() {
+    if (state.films.length) enterFilms();
+    else enterDone();
+  }
 
-    itemEl.classList.add('removing');
-    setTimeout(function () {
-      itemEl.remove();
-      var remaining = el.grid.querySelectorAll('.grid-item:not(.removing)');
-      el.gridCount.textContent = remaining.length + ' images';
-      state.reviewImages = imagesByVerdict(state.reviewFilter);
-      if (!remaining.length) {
-        el.grid.innerHTML = '<div id="grid-empty">No images</div>';
-      }
-    }, 250);
+  // ── Review (fullscreen from grid) ──────────────────────────────
+
+  function enterReview(images, index) {
+    hideAll();
+    state.mode = 'review';
+    state.images = images.slice();
+    state.index = index;
+    el.photo.style.display = '';
+    showDetail();
+    show(index);
+  }
+
+  function exitReview() {
+    enterGrid(state.reviewFilter);
   }
 
   // ── Drag / swipe ───────────────────────────────────────────────
@@ -657,10 +923,8 @@ body.mode-grid { touch-action: auto; }
     if (state.mode !== 'select' && state.mode !== 'review') return;
     if (state.animating) return;
     drag.active = true;
-    drag.startX = x;
-    drag.startY = y;
-    drag.dx = 0;
-    drag.dy = 0;
+    drag.startX = x; drag.startY = y;
+    drag.dx = 0; drag.dy = 0;
     el.photo.classList.remove('fly', 'snap');
   }
 
@@ -689,25 +953,19 @@ body.mode-grid { touch-action: auto; }
     el.indLike.style.opacity = '0';
     el.indNope.style.opacity = '0';
 
-    var ax = Math.abs(drag.dx);
-    var ay = Math.abs(drag.dy);
+    var ax = Math.abs(drag.dx), ay = Math.abs(drag.dy);
 
     if (ax < TAP_THRESHOLD && ay < TAP_THRESHOLD) {
       el.photo.style.transform = '';
       x > window.innerWidth / 2 ? nav(1) : nav(-1);
+      if (state.mode === 'review') resetAutoHide();
       return;
     }
 
     if (ay > ax && ay > SWIPE_THRESHOLD) {
-      var verdict = drag.dy < 0 ? 'like' : 'dislike';
-      if (state.mode === 'select') {
-        decide(verdict);
-      } else {
-        reclassify(verdict);
-        el.photo.classList.add('snap');
-        el.photo.style.transform = '';
-        setTimeout(function () { el.photo.classList.remove('snap'); }, 200);
-      }
+      var v = drag.dy < 0 ? 'like' : 'dislike';
+      if (state.mode === 'select') { decide(v); }
+      else { reclassify(v); snapBack(); }
       return;
     }
 
@@ -717,6 +975,10 @@ body.mode-grid { touch-action: auto; }
       return;
     }
 
+    snapBack();
+  }
+
+  function snapBack() {
     el.photo.classList.add('snap');
     el.photo.style.transform = '';
     setTimeout(function () { el.photo.classList.remove('snap'); }, 200);
@@ -726,36 +988,45 @@ body.mode-grid { touch-action: auto; }
 
   function bindEvents() {
     document.addEventListener('touchstart', function (e) {
-      if (state.mode === 'grid') return;
+      if (state.mode === 'review') resetAutoHide();
+      if (state.mode !== 'select' && state.mode !== 'review') return;
+      if (isOnPanel(e.target)) return;
       ptrDown(e.touches[0].clientX, e.touches[0].clientY);
     }, { passive: true });
     document.addEventListener('touchmove', function (e) {
-      if (state.mode === 'grid') return;
+      if (state.mode !== 'select' && state.mode !== 'review') return;
       if (drag.active) e.preventDefault();
       ptrMove(e.touches[0].clientX, e.touches[0].clientY);
     }, { passive: false });
     document.addEventListener('touchend', function (e) {
-      if (state.mode === 'grid') return;
+      if (state.mode !== 'select' && state.mode !== 'review') return;
       ptrUp(e.changedTouches[0].clientX);
     }, { passive: true });
 
     document.addEventListener('mousedown', function (e) {
-      if (state.mode === 'grid') return;
+      if (state.mode !== 'select' && state.mode !== 'review') return;
+      if (isOnPanel(e.target)) return;
       ptrDown(e.clientX, e.clientY);
     });
     document.addEventListener('mousemove', function (e) {
-      if (state.mode === 'grid') return;
+      if (state.mode === 'review') resetAutoHide();
+      if (state.mode !== 'select' && state.mode !== 'review') return;
       ptrMove(e.clientX, e.clientY);
     });
     document.addEventListener('mouseup', function (e) {
-      if (state.mode === 'grid') return;
+      if (state.mode !== 'select' && state.mode !== 'review') return;
       ptrUp(e.clientX);
     });
 
     document.addEventListener('keydown', function (e) {
+      if (document.activeElement === el.dtComment) {
+        if (e.key === 'Escape') { el.dtComment.blur(); e.preventDefault(); }
+        return;
+      }
       if (state.animating) return;
+      var m = state.mode;
 
-      if (state.mode === 'select') {
+      if (m === 'select') {
         switch (e.key) {
           case 'ArrowRight': e.preventDefault(); nav(1); break;
           case 'ArrowLeft':  e.preventDefault(); nav(-1); break;
@@ -763,7 +1034,8 @@ body.mode-grid { touch-action: auto; }
           case 'ArrowDown':  e.preventDefault(); decide('dislike'); break;
           case ' ':          e.preventDefault(); toggleFullscreen(); break;
         }
-      } else if (state.mode === 'review') {
+      } else if (m === 'review') {
+        resetAutoHide();
         switch (e.key) {
           case 'ArrowRight': e.preventDefault(); nav(1); break;
           case 'ArrowLeft':  e.preventDefault(); nav(-1); break;
@@ -772,74 +1044,121 @@ body.mode-grid { touch-action: auto; }
           case 'Escape':     e.preventDefault(); exitReview(); break;
           case ' ':          e.preventDefault(); toggleFullscreen(); break;
         }
-      } else if (state.mode === 'grid') {
+      } else if (m === 'grid') {
         if (e.key === 'Escape') { e.preventDefault(); exitGrid(); }
+      } else if (m === 'done') {
+        if (e.key === 'Escape' && state.films.length) { e.preventDefault(); enterFilms(); }
       }
     });
 
-    document.getElementById('grid-back').addEventListener('click', exitGrid);
+    // Films list
+    el.filmsList.addEventListener('click', function (e) {
+      var card = e.target.closest('.film-card');
+      if (!card) return;
+      var idx = parseInt(card.dataset.idx, 10);
+      if (state.films[idx]) openFilm(state.films[idx]);
+    });
 
+    // Grid
+    document.getElementById('grid-back').addEventListener('click', function () {
+      if (state.films.length) enterFilms(); else enterDone();
+    });
+    el.gridTabs.addEventListener('click', function (e) {
+      var tab = e.target.closest('.grid-tab');
+      if (!tab || tab.classList.contains('active')) return;
+      state.reviewFilter = tab.dataset.filter;
+      buildGridTabs();
+      buildGrid();
+    });
     el.grid.addEventListener('click', function (e) {
-      var toggle = e.target.closest('.grid-toggle');
-      if (toggle) {
-        e.stopPropagation();
-        var url = toggle.dataset.url;
-        var item = toggle.closest('.grid-item');
-        gridReclassify(url, item);
-        return;
-      }
       var item = e.target.closest('.grid-item');
-      if (item && !item.classList.contains('removing')) {
+      if (item) {
         var url = item.dataset.url;
-        var imgs = state.reviewImages;
-        var idx = imgs.indexOf(url);
-        if (idx >= 0) enterReview(imgs, idx);
+        var idx = state.reviewImages.indexOf(url);
+        if (idx >= 0) enterReview(state.reviewImages, idx);
       }
     });
+
+    // Detail panel
+    el.detailBack.addEventListener('click', function (e) {
+      e.stopPropagation();
+      exitReview();
+    });
+
+    el.dtHeart.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (!state.images.length) return;
+      var url = state.images[state.index];
+      var d = getD(url) || { liked: false, rating: null, comment: '' };
+      setD(url, { liked: !d.liked });
+      syncDetail();
+      resetAutoHide();
+    });
+
+    el.dtStars.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var star = e.target.closest('.dt-star');
+      if (!star || !state.images.length) return;
+      var url = state.images[state.index];
+      var v = parseInt(star.dataset.v, 10);
+      var d = getD(url) || { liked: false, rating: null, comment: '' };
+      setD(url, { rating: d.rating === v ? null : v });
+      syncDetail();
+      resetAutoHide();
+    });
+
+    el.dtComment.addEventListener('input', function () {
+      if (!state.images.length) return;
+      setD(state.images[state.index], { comment: el.dtComment.value });
+    });
+    el.dtComment.addEventListener('focus', function () { clearTimeout(autoHideTimer); });
+    el.dtComment.addEventListener('blur', function () { resetAutoHide(); });
   }
 
-  // ── Init ───────────────────────────────────────────────────────
+  // ── Error / Init ───────────────────────────────────────────────
 
   function showError(msg) {
+    hideAll();
     el.overlay.textContent = msg;
     el.overlay.style.display = 'flex';
   }
 
   function init() {
     var params = new URLSearchParams(location.search);
+    var filmParam = params.get('film');
     state.folder = params.get('folder') || null;
-    loadDecisions();
     bindEvents();
 
-    loadImageList(state.folder)
-      .then(function (images) {
-        if (!images || !images.length) {
-          console.error('[logjam] no images from any source');
-          showError('No images found.');
-          return;
-        }
-        state.allImages = images;
-        filterUndecided();
-        console.log('[logjam]', images.length, 'total,', state.images.length, 'remaining');
-        if (!state.images.length) { enterDone(); return; }
-        enterSelect();
-      })
-      .catch(function (err) {
-        console.error('[logjam] init failed:', err);
-        showError('Failed to load images.');
-      });
-  }
+    if (state.folder) {
+      loadDecisions();
+      loadImageList(state.folder).then(startViewer).catch(function () { showError('Failed to load images.'); });
+      return;
+    }
 
-  // ── Public API ─────────────────────────────────────────────────
+    loadFilms().then(function (films) {
+      state.films = films;
+      if (filmParam && films.length) {
+        var f = findFilm(filmParam);
+        if (f) { openFilm(f); return; }
+      }
+      if (films.length) { enterFilms(); }
+      else {
+        loadDecisions();
+        loadImageList(null).then(startViewer).catch(function () { showError('Failed to load images.'); });
+      }
+    });
+  }
 
   window.logjam = {
     state: state,
     nav: nav,
-    show: show,
     decide: decide,
     reclassify: reclassify,
-    reset: resetDecisions,
+    getD: getD,
+    setD: setD,
+    enterFilms: enterFilms,
     enterGrid: enterGrid,
+    openFilm: openFilm,
     reload: init
   };
 
