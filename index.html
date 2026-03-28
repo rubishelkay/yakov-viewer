@@ -26,11 +26,15 @@ body.mode-scroll { touch-action: auto; }
   top: 0; left: 0;
   width: 100%; height: 100%;
   object-fit: contain;
-  will-change: transform, opacity;
 }
-#photo.loading { opacity: 0; }
-#photo.fly { transition: transform 0.28s ease-out, opacity 0.28s ease-out; }
-#photo.snap { transition: transform 0.2s ease-out; }
+#photo.fly {
+  will-change: transform, opacity;
+  transition: transform 0.28s ease-out, opacity 0.28s ease-out;
+}
+#photo.snap {
+  will-change: transform;
+  transition: transform 0.2s ease-out;
+}
 
 #spinner {
   position: fixed;
@@ -210,6 +214,7 @@ body.mode-scroll { touch-action: auto; }
   cursor: pointer;
   overflow: hidden;
   background: #111;
+  content-visibility: auto;
 }
 .grid-item::before {
   content: "";
@@ -510,6 +515,7 @@ body.mode-scroll { touch-action: auto; }
   };
 
   var preloaded = {};
+  var pendingUrl = null;
   var spinnerTimer = null;
   var flashTimer = null;
   var autoHideTimer = null;
@@ -661,8 +667,6 @@ body.mode-scroll { touch-action: auto; }
     state.index = ((i % len) + len) % len;
     var url = state.images[state.index];
 
-    el.photo.style.transform = '';
-    el.photo.style.opacity = '';
     el.photo.classList.remove('fly', 'snap');
     updateCounter();
 
@@ -670,13 +674,13 @@ body.mode-scroll { touch-action: auto; }
     if (cached && cached.complete && cached.naturalWidth > 0) {
       applyImage(url);
     } else {
-      el.photo.classList.add('loading');
+      pendingUrl = url;
       scheduleSpinner();
       var img = preload(url);
       img.onload = function () {
-        if (state.images.length && state.images[state.index] === url) applyImage(url);
+        if (pendingUrl === url) applyImage(url);
       };
-      img.onerror = function () { if (state.images.length > 1) nav(1); };
+      img.onerror = function () { pendingUrl = null; if (state.images.length > 1) nav(1); };
     }
 
     if (state.images.length > 1) preload(state.images[wrap(state.index + 1)]);
@@ -686,8 +690,10 @@ body.mode-scroll { touch-action: auto; }
   }
 
   function applyImage(url) {
+    pendingUrl = null;
+    el.photo.style.transform = '';
+    el.photo.style.opacity = '';
     el.photo.src = url;
-    el.photo.classList.remove('loading');
     el.spinner.classList.remove('visible');
     clearTimeout(spinnerTimer);
   }
@@ -703,7 +709,7 @@ body.mode-scroll { touch-action: auto; }
   function scheduleSpinner() {
     clearTimeout(spinnerTimer);
     spinnerTimer = setTimeout(function () {
-      if (el.photo.classList.contains('loading')) el.spinner.classList.add('visible');
+      if (pendingUrl) el.spinner.classList.add('visible');
     }, 250);
   }
 
@@ -1118,6 +1124,7 @@ body.mode-scroll { touch-action: auto; }
       var img = document.createElement('img');
       img.src = imgs[i];
       img.loading = 'lazy';
+      img.decoding = 'async';
       img.draggable = false;
       img.alt = '';
       item.appendChild(img);
@@ -1151,6 +1158,7 @@ body.mode-scroll { touch-action: auto; }
   // ── Drag / swipe ───────────────────────────────────────────────
 
   var drag = { active: false, startX: 0, startY: 0, dx: 0, dy: 0 };
+  var lastTouchEnd = 0;
 
   function ptrDown(x, y) {
     if (state.mode !== 'select' && state.mode !== 'review') return;
@@ -1233,22 +1241,26 @@ body.mode-scroll { touch-action: auto; }
       ptrMove(e.touches[0].clientX, e.touches[0].clientY);
     }, { passive: false });
     document.addEventListener('touchend', function (e) {
+      lastTouchEnd = Date.now();
       if (state.mode !== 'select' && state.mode !== 'review') return;
       ptrUp(e.changedTouches[0].clientX);
     }, { passive: true });
 
     document.addEventListener('mousedown', function (e) {
+      if (Date.now() - lastTouchEnd < 500) return;
       if (state.mode !== 'select' && state.mode !== 'review') return;
       if (isOnPanel(e.target)) return;
       ptrDown(e.clientX, e.clientY);
     });
     document.addEventListener('mousemove', function (e) {
+      if (Date.now() - lastTouchEnd < 500) return;
       if (state.mode === 'review') resetAutoHide();
       if (state.mode === 'select' && !drag.active) scheduleSelectAutoHide();
       if (state.mode !== 'select' && state.mode !== 'review') return;
       ptrMove(e.clientX, e.clientY);
     });
     document.addEventListener('mouseup', function (e) {
+      if (Date.now() - lastTouchEnd < 500) return;
       if (state.mode !== 'select' && state.mode !== 'review') return;
       ptrUp(e.clientX);
     });
