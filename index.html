@@ -141,6 +141,7 @@ body.mode-scroll { touch-action: auto; }
   border-radius: 3px;
   font-size: 11px;
 }
+.film-count { color: rgba(255,255,255,0.25); font-size: 11px; }
 .film-progress { color: rgba(255,255,255,0.2); font-size: 11px; }
 .film-liked { color: #4ecdc4; }
 
@@ -192,7 +193,7 @@ body.mode-scroll { touch-action: auto; }
   flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 1px;
+  padding: 0;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 2px;
@@ -205,19 +206,30 @@ body.mode-scroll { touch-action: auto; }
 
 .grid-item {
   position: relative;
-  aspect-ratio: 1/1;
+  width: 100%;
   cursor: pointer;
   overflow: hidden;
   background: #111;
 }
-.grid-item img {
-  width: 100%; height: 100%;
-  object-fit: cover;
+.grid-item::before {
+  content: "";
   display: block;
-  transition: transform 0.15s ease, opacity 0.15s ease;
+  padding-top: 100%;
 }
-@media (hover: hover) { .grid-item:hover img { transform: scale(1.04); } }
-.grid-item:active img { opacity: 0.6; }
+.grid-item img {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  image-rendering: auto;
+}
+@media (hover: hover) {
+  .grid-item:hover { opacity: 0.85; }
+}
+.grid-item:active { opacity: 0.6; }
 
 #grid-empty {
   grid-column: 1 / -1;
@@ -227,82 +239,179 @@ body.mode-scroll { touch-action: auto; }
   padding: 3rem;
 }
 
-/* ── Detail panel (review mode) ───────────────────────────── */
+/* ── Select header (viewer mode) ──────────────────────────── */
 
-#detail-back {
+#select-header {
   position: fixed;
-  top: 14px; left: 14px;
-  color: rgba(255,255,255,0.5);
-  font-size: 22px;
-  cursor: pointer;
-  z-index: 62;
+  top: 0; left: 0; right: 0;
   display: none;
-  line-height: 1;
-  padding: 4px;
-  transition: opacity 0.3s, color 0.15s;
+  align-items: center;
+  padding: 14px 16px;
+  z-index: 62;
+  pointer-events: none;
+  transition: opacity 0.3s;
 }
-#detail-back:hover { color: #fff; }
+#select-header.visible { display: flex; }
+#select-header.hidden { opacity: 0; }
+
+#select-back {
+  color: rgba(255,255,255,0.45);
+  font-size: 18px;
+  cursor: pointer;
+  pointer-events: auto;
+  line-height: 1;
+  padding: 2px 8px 2px 0;
+  transition: color 0.15s;
+}
+#select-back:hover { color: #fff; }
+
+#select-title {
+  color: rgba(255,255,255,0.3);
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Detail overlay (review mode) ─────────────────────────── */
+
+#detail-top {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  z-index: 62;
+  pointer-events: none;
+  transition: opacity 0.3s;
+  font: 12px/1 -apple-system, system-ui, sans-serif;
+}
+
+#detail-title {
+  color: rgba(255,255,255,0.4);
+  cursor: pointer;
+  pointer-events: auto;
+  transition: color 0.15s;
+  letter-spacing: 0.01em;
+}
+#detail-title:hover { color: rgba(255,255,255,0.7); }
+
+#detail-counter {
+  color: rgba(255,255,255,0.25);
+  letter-spacing: 0.02em;
+}
 
 #detail-panel {
   position: fixed;
-  bottom: 16px; left: 16px;
+  bottom: 18px; left: 18px;
   display: none;
   align-items: center;
   gap: 14px;
-  padding: 10px 14px;
-  background: rgba(0,0,0,0.45);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-radius: 10px;
+  padding: 0;
   z-index: 62;
   transition: opacity 0.3s;
 }
 
-#detail-back.hidden,
+#detail-top.hidden,
 #detail-panel.hidden { opacity: 0; pointer-events: none; }
 
 .dt-heart {
-  font-size: 22px;
+  font-size: 20px;
   cursor: pointer;
-  color: rgba(255,255,255,0.35);
+  color: rgba(255,255,255,0.3);
   transition: color 0.15s, transform 0.15s;
   line-height: 1;
 }
-.dt-heart.active { color: #4ecdc4; }
-.dt-heart:active { transform: scale(1.25); }
+.dt-heart.active { color: rgba(255,255,255,0.9); }
+.dt-heart:active { transform: scale(1.2); }
 
-.dt-stars { display: flex; gap: 3px; }
+.dt-stars { display: flex; gap: 2px; }
 .dt-star {
-  font-size: 16px;
+  font-size: 14px;
   cursor: pointer;
   color: rgba(255,255,255,0.15);
   transition: color 0.1s;
   line-height: 1;
 }
-.dt-star.filled { color: #f0c040; }
-@media (hover: hover) { .dt-star:hover { color: rgba(240,192,64,0.6); } }
+.dt-star.filled { color: rgba(255,255,255,0.8); }
+@media (hover: hover) { .dt-star:hover { color: rgba(255,255,255,0.45); } }
 
 .dt-comment {
-  width: 120px;
-  background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 5px;
-  color: rgba(255,255,255,0.7);
+  width: 110px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  color: rgba(255,255,255,0.55);
   font: 11px/1.3 -apple-system, system-ui, sans-serif;
-  padding: 5px 8px;
+  padding: 4px 0;
   outline: none;
   user-select: text;
   -webkit-user-select: text;
   touch-action: auto;
+  transition: border-color 0.2s, color 0.2s, width 0.2s;
 }
 .dt-comment::placeholder { color: rgba(255,255,255,0.15); }
 .dt-comment:focus {
-  background: rgba(255,255,255,0.12);
-  border-color: rgba(255,255,255,0.15);
-  color: rgba(255,255,255,0.9);
-  width: 180px;
+  border-bottom-color: rgba(255,255,255,0.18);
+  color: rgba(255,255,255,0.85);
+  width: 160px;
 }
-@media (max-width: 400px) { .dt-comment { width: 80px; } .dt-comment:focus { width: 120px; } }
+@media (max-width: 400px) { .dt-comment { width: 70px; } .dt-comment:focus { width: 110px; } }
+
+/* ── Share button ─────────────────────────────────────────── */
+
+#detail-share {
+  position: fixed;
+  bottom: 18px; right: 18px;
+  display: none;
+  z-index: 62;
+  color: rgba(255,255,255,0.3);
+  font: 12px/1 -apple-system, system-ui, sans-serif;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: opacity 0.3s, color 0.15s;
+  letter-spacing: 0.01em;
+}
+#detail-share:hover { color: rgba(255,255,255,0.6); }
+#detail-share.hidden { opacity: 0; pointer-events: none; }
+
+/* ── Share popup ──────────────────────────────────────────── */
+
+#share-popup {
+  position: fixed;
+  bottom: 42px; right: 18px;
+  display: none;
+  flex-direction: column;
+  gap: 0;
+  background: rgba(10,10,10,0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 8px;
+  z-index: 70;
+  min-width: 140px;
+  overflow: hidden;
+}
+#share-popup.active { display: flex; }
+
+.share-option {
+  display: block;
+  padding: 11px 16px;
+  color: rgba(255,255,255,0.6);
+  font: 12px/1.2 -apple-system, system-ui, sans-serif;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+  text-decoration: none;
+  border: none;
+  background: none;
+  text-align: left;
+  width: 100%;
+}
+.share-option:hover { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.85); }
+.share-option:active { background: rgba(255,255,255,0.1); }
+.share-option + .share-option { border-top: 1px solid rgba(255,255,255,0.04); }
 </style>
 </head>
 <body>
@@ -314,7 +423,15 @@ body.mode-scroll { touch-action: auto; }
 <div id="ind-nope" class="indicator">NOPE</div>
 <div id="overlay"></div>
 
-<a id="detail-back">&larr;</a>
+<div id="select-header">
+  <a id="select-back">&larr;</a>
+  <span id="select-title"></span>
+</div>
+
+<div id="detail-top">
+  <a id="detail-title"></a>
+  <span id="detail-counter"></span>
+</div>
 <div id="detail-panel">
   <span class="dt-heart" id="dt-heart">&#9825;</span>
   <div class="dt-stars" id="dt-stars">
@@ -326,6 +443,8 @@ body.mode-scroll { touch-action: auto; }
   </div>
   <input class="dt-comment" id="dt-comment" type="text" placeholder="note..." maxlength="200">
 </div>
+<a id="detail-share">Share</a>
+<div id="share-popup"></div>
 
 <div id="films-view">
   <div id="films-header">Logjamming</div>
@@ -376,11 +495,18 @@ body.mode-scroll { touch-action: auto; }
     grid: document.getElementById('grid'),
     gridTitle: document.getElementById('grid-title'),
     gridTabs: document.getElementById('grid-tabs'),
-    detailBack: document.getElementById('detail-back'),
+    selectHeader: document.getElementById('select-header'),
+    selectBack: document.getElementById('select-back'),
+    selectTitle: document.getElementById('select-title'),
+    detailTop: document.getElementById('detail-top'),
+    detailTitle: document.getElementById('detail-title'),
+    detailCounter: document.getElementById('detail-counter'),
     detailPanel: document.getElementById('detail-panel'),
     dtHeart: document.getElementById('dt-heart'),
     dtStars: document.getElementById('dt-stars'),
-    dtComment: document.getElementById('dt-comment')
+    dtComment: document.getElementById('dt-comment'),
+    detailShare: document.getElementById('detail-share'),
+    sharePopup: document.getElementById('share-popup')
   };
 
   var preloaded = {};
@@ -587,8 +713,8 @@ body.mode-scroll { touch-action: auto; }
       var t = (state.index + 1) + '/' + state.images.length + ' remaining';
       el.counter.textContent = liked ? t + ' \u00b7 ' + liked + ' liked' : t;
     } else if (state.mode === 'review') {
-      var labels = { all: '', like: 'liked', dislike: 'passed' };
-      el.counter.textContent = (state.index + 1) + '/' + state.images.length + ' ' + (labels[state.reviewFilter] || '');
+      el.counter.textContent = '';
+      el.detailCounter.textContent = (state.index + 1) + '/' + state.images.length;
     }
   }
 
@@ -660,16 +786,27 @@ body.mode-scroll { touch-action: auto; }
 
   // ── Detail panel (review mode) ─────────────────────────────────
 
+  function detailBackLabel() {
+    var f = state.reviewFilter;
+    if (f === 'like') return '\u2190 Back to Liked';
+    if (f === 'dislike') return '\u2190 Back to Passed';
+    return '\u2190 ' + filmTitle();
+  }
+
   function showDetail() {
-    el.detailBack.style.display = '';
+    el.detailTop.style.display = 'flex';
     el.detailPanel.style.display = 'flex';
+    el.detailShare.style.display = '';
+    el.detailTitle.textContent = detailBackLabel();
     syncDetail();
     resetAutoHide();
   }
 
   function hideDetail() {
-    el.detailBack.style.display = 'none';
+    el.detailTop.style.display = 'none';
     el.detailPanel.style.display = 'none';
+    el.detailShare.style.display = 'none';
+    closeSharePopup();
     clearTimeout(autoHideTimer);
   }
 
@@ -692,19 +829,87 @@ body.mode-scroll { touch-action: auto; }
   }
 
   function resetAutoHide() {
-    el.detailBack.classList.remove('hidden');
+    el.detailTop.classList.remove('hidden');
     el.detailPanel.classList.remove('hidden');
+    el.detailShare.classList.remove('hidden');
     clearTimeout(autoHideTimer);
     autoHideTimer = setTimeout(function () {
       if (state.mode === 'review' && document.activeElement !== el.dtComment) {
-        el.detailBack.classList.add('hidden');
+        el.detailTop.classList.add('hidden');
         el.detailPanel.classList.add('hidden');
+        el.detailShare.classList.add('hidden');
+        closeSharePopup();
       }
     }, AUTOHIDE_MS);
   }
 
   function isOnPanel(target) {
-    return target.closest('#detail-panel') || target.closest('#detail-back');
+    return target.closest('#detail-panel') || target.closest('#detail-top') ||
+           target.closest('#detail-share') || target.closest('#share-popup') ||
+           target.closest('#select-header');
+  }
+
+  // ── Share ──────────────────────────────────────────────────────
+
+  function shareCurrentImage() {
+    if (!state.images.length) return;
+    var url = state.images[state.index];
+    var title = filmTitle() + ' \u2013 ' + (state.index + 1) + '/' + state.images.length;
+
+    if (navigator.share) {
+      navigator.share({ title: title, url: url }).catch(function () {});
+      return;
+    }
+    toggleSharePopup(url, title);
+  }
+
+  function toggleSharePopup(url, title) {
+    if (el.sharePopup.classList.contains('active')) { closeSharePopup(); return; }
+    el.sharePopup.innerHTML = '';
+
+    var actions = [
+      { label: 'Copy link', fn: function () { copyToClipboard(url); closeSharePopup(); } },
+      { label: 'Download', fn: function () { downloadImage(url); closeSharePopup(); } },
+      { label: 'Email', fn: function () { window.open('mailto:?subject=' + encodeURIComponent(title) + '&body=' + encodeURIComponent(url)); closeSharePopup(); } },
+      { label: 'Open in tab', fn: function () { window.open(url, '_blank'); closeSharePopup(); } }
+    ];
+
+    for (var i = 0; i < actions.length; i++) {
+      var btn = document.createElement('button');
+      btn.className = 'share-option';
+      btn.textContent = actions[i].label;
+      btn.addEventListener('click', actions[i].fn);
+      el.sharePopup.appendChild(btn);
+    }
+    el.sharePopup.classList.add('active');
+  }
+
+  function closeSharePopup() {
+    el.sharePopup.classList.remove('active');
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).catch(function () {});
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+  }
+
+  function downloadImage(url) {
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = url.split('/').pop() || 'image.jpg';
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   }
 
   // ── Mode transitions ───────────────────────────────────────────
@@ -720,6 +925,7 @@ body.mode-scroll { touch-action: auto; }
     el.counter.textContent = '';
     el.indLike.style.opacity = '0';
     el.indNope.style.opacity = '0';
+    el.selectHeader.classList.remove('visible', 'hidden');
     document.body.classList.remove('mode-scroll');
     hideDetail();
   }
@@ -759,6 +965,12 @@ body.mode-scroll { touch-action: auto; }
 
       var meta = document.createElement('div');
       meta.className = 'film-meta';
+      if (f.count) {
+        var cnt = document.createElement('span');
+        cnt.className = 'film-count';
+        cnt.textContent = f.count + ' images';
+        meta.appendChild(cnt);
+      }
       if (f.tags) {
         for (var t = 0; t < f.tags.length; t++) {
           var tag = document.createElement('span');
@@ -811,7 +1023,28 @@ body.mode-scroll { touch-action: auto; }
     if (!state.images.length) { enterDone(); return; }
     state.index = 0;
     el.photo.style.display = '';
+    if (state.film) {
+      el.selectTitle.textContent = state.film.title;
+      el.selectHeader.classList.add('visible');
+    }
     show(0);
+    scheduleSelectAutoHide();
+  }
+
+  var selectHideTimer = null;
+  var SELECT_AUTOHIDE_MS = 3000;
+
+  function scheduleSelectAutoHide() {
+    clearTimeout(selectHideTimer);
+    el.selectHeader.classList.remove('hidden');
+    selectHideTimer = setTimeout(function () {
+      if (state.mode === 'select') el.selectHeader.classList.add('hidden');
+    }, SELECT_AUTOHIDE_MS);
+  }
+
+  function exitSelect() {
+    if (state.films.length) enterFilms();
+    else enterDone();
   }
 
   function enterDone() {
@@ -989,6 +1222,7 @@ body.mode-scroll { touch-action: auto; }
   function bindEvents() {
     document.addEventListener('touchstart', function (e) {
       if (state.mode === 'review') resetAutoHide();
+      if (state.mode === 'select') scheduleSelectAutoHide();
       if (state.mode !== 'select' && state.mode !== 'review') return;
       if (isOnPanel(e.target)) return;
       ptrDown(e.touches[0].clientX, e.touches[0].clientY);
@@ -1010,6 +1244,7 @@ body.mode-scroll { touch-action: auto; }
     });
     document.addEventListener('mousemove', function (e) {
       if (state.mode === 'review') resetAutoHide();
+      if (state.mode === 'select' && !drag.active) scheduleSelectAutoHide();
       if (state.mode !== 'select' && state.mode !== 'review') return;
       ptrMove(e.clientX, e.clientY);
     });
@@ -1033,6 +1268,7 @@ body.mode-scroll { touch-action: auto; }
           case 'ArrowUp':    e.preventDefault(); decide('like'); break;
           case 'ArrowDown':  e.preventDefault(); decide('dislike'); break;
           case ' ':          e.preventDefault(); toggleFullscreen(); break;
+          case 'Escape':     e.preventDefault(); exitSelect(); break;
         }
       } else if (m === 'review') {
         resetAutoHide();
@@ -1050,6 +1286,9 @@ body.mode-scroll { touch-action: auto; }
         if (e.key === 'Escape' && state.films.length) { e.preventDefault(); enterFilms(); }
       }
     });
+
+    // Select header
+    el.selectBack.addEventListener('click', function () { exitSelect(); });
 
     // Films list
     el.filmsList.addEventListener('click', function (e) {
@@ -1080,7 +1319,7 @@ body.mode-scroll { touch-action: auto; }
     });
 
     // Detail panel
-    el.detailBack.addEventListener('click', function (e) {
+    el.detailTitle.addEventListener('click', function (e) {
       e.stopPropagation();
       exitReview();
     });
@@ -1113,6 +1352,19 @@ body.mode-scroll { touch-action: auto; }
     });
     el.dtComment.addEventListener('focus', function () { clearTimeout(autoHideTimer); });
     el.dtComment.addEventListener('blur', function () { resetAutoHide(); });
+
+    // Share
+    el.detailShare.addEventListener('click', function (e) {
+      e.stopPropagation();
+      shareCurrentImage();
+      resetAutoHide();
+    });
+
+    document.addEventListener('click', function (e) {
+      if (el.sharePopup.classList.contains('active') && !e.target.closest('#share-popup') && !e.target.closest('#detail-share')) {
+        closeSharePopup();
+      }
+    });
   }
 
   // ── Error / Init ───────────────────────────────────────────────
