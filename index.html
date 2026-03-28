@@ -1,90 +1,342 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Logjamming</title>
 <style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
 html, body {
-margin:0;
-width:100%;
-height:100%;
-background:black;
-overflow:hidden;
+  width: 100%; height: 100%;
+  background: #000;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
-img {
-position:fixed;
-top:0;
-left:0;
-width:100%;
-height:100%;
-object-fit:contain;
+#photo {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  object-fit: contain;
+  transition: opacity 0.12s ease;
+}
+
+#photo.loading { opacity: 0; }
+
+#spinner {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px; height: 20px;
+  border: 2px solid rgba(255,255,255,0.1);
+  border-top-color: rgba(255,255,255,0.5);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+#spinner.visible { opacity: 1; }
+
+@keyframes spin {
+  to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+#counter {
+  position: fixed;
+  bottom: 12px; right: 16px;
+  color: rgba(255,255,255,0.25);
+  font: 11px/1 -apple-system, system-ui, sans-serif;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+.nav-zone {
+  position: fixed;
+  top: 0; bottom: 0;
+  width: 50%;
+  z-index: 10;
+  cursor: pointer;
+}
+.nav-prev { left: 0; cursor: w-resize; }
+.nav-next { right: 0; cursor: e-resize; }
+
+#error-msg {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  color: #555;
+  font: 14px/1.5 -apple-system, system-ui, sans-serif;
+  text-align: center;
+  padding: 2rem;
 }
 </style>
 </head>
-
 <body>
 
-<img id="photo">
+<img id="photo" alt="">
+<div id="spinner"></div>
+<div id="counter"></div>
+<div class="nav-zone nav-prev" id="nav-prev"></div>
+<div class="nav-zone nav-next" id="nav-next"></div>
+<div id="error-msg"></div>
 
 <script>
-const images = [
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300004.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300005.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300006.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300007.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300008.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300009.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300010.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300011.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300012.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300013.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300014.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300015.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300016.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300017.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300018.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300019.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300020.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300021.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300022.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300023.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300024.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300025.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300026.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300027.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300028.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300029.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300030.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300031.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300032.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300033.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300034.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300035.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300036.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300037.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300038.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300039.jpg",
-"https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300040.jpg"
-];
+(function () {
+  'use strict';
 
-let index = 0;
-const img = document.getElementById("photo");
+  var state = {
+    images: [],
+    index: 0,
+    folder: null
+  };
 
-function show(){
-img.src = images[index];
-}
+  var el = {
+    photo: document.getElementById('photo'),
+    spinner: document.getElementById('spinner'),
+    counter: document.getElementById('counter'),
+    error: document.getElementById('error-msg')
+  };
 
-function next(){
-index++;
-if(index >= images.length) index = 0;
-show();
-}
+  var preloaded = {};
+  var spinnerTimer = null;
 
-document.addEventListener("click", next);
-document.addEventListener("touchstart", next);
+  var FALLBACK_IMAGES = [
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300004.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300005.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300006.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300007.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300008.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300009.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300010.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300011.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300012.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300013.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300014.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300015.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300016.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300017.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300018.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300019.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300020.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300021.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300022.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300023.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300024.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300025.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300026.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300027.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300028.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300029.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300030.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300031.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300032.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300033.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300034.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300035.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300036.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300037.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300038.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300039.jpg",
+    "https://pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev/jfilms_mediumqual/jf73_f400_jpg_sm/000035300040.jpg"
+  ];
 
-show();
+  // ── Image loading ──────────────────────────────────────────────
+
+  function loadImages(folder) {
+    if (folder) {
+      console.log('[logjam] loading from API, folder:', folder);
+      return fetch('/api/images?folder=' + encodeURIComponent(folder))
+        .then(function (r) {
+          if (!r.ok) throw new Error('API returned ' + r.status);
+          return r.json();
+        })
+        .then(function (d) {
+          var imgs = d.images || [];
+          console.log('[logjam] API returned', imgs.length, 'images');
+          return imgs;
+        })
+        .catch(function (err) {
+          console.warn('[logjam] API failed:', err.message, '— trying images.json');
+          return fetchJson();
+        });
+    }
+    return fetchJson();
+  }
+
+  function fetchJson() {
+    console.log('[logjam] loading from images.json');
+    return fetch('images.json')
+      .then(function (r) {
+        if (!r.ok) throw new Error('images.json returned ' + r.status);
+        return r.json();
+      })
+      .then(function (d) {
+        var imgs = d.images || d;
+        console.log('[logjam] images.json returned', imgs.length, 'images');
+        return imgs;
+      })
+      .catch(function (err) {
+        console.warn('[logjam] images.json failed:', err.message, '— using fallback');
+        return FALLBACK_IMAGES;
+      });
+  }
+
+  // ── Display ────────────────────────────────────────────────────
+
+  function show(i) {
+    var len = state.images.length;
+    state.index = ((i % len) + len) % len;
+    var url = state.images[state.index];
+
+    updateCounter();
+
+    var cached = preloaded[url];
+    if (cached && cached.complete && cached.naturalWidth > 0) {
+      applyImage(url);
+    } else {
+      el.photo.classList.add('loading');
+      scheduleSpinner();
+      var img = preload(url);
+      img.onload = function () {
+        if (state.images[state.index] === url) applyImage(url);
+      };
+      img.onerror = function () {
+        if (state.images.length > 1) next();
+      };
+    }
+
+    preload(state.images[wrap(state.index + 1)]);
+    preload(state.images[wrap(state.index - 1)]);
+  }
+
+  function applyImage(url) {
+    el.photo.src = url;
+    el.photo.classList.remove('loading');
+    el.spinner.classList.remove('visible');
+    clearTimeout(spinnerTimer);
+  }
+
+  function preload(url) {
+    if (!url || preloaded[url]) return preloaded[url] || new Image();
+    var img = new Image();
+    img.src = url;
+    preloaded[url] = img;
+    return img;
+  }
+
+  function scheduleSpinner() {
+    clearTimeout(spinnerTimer);
+    spinnerTimer = setTimeout(function () {
+      if (el.photo.classList.contains('loading')) {
+        el.spinner.classList.add('visible');
+      }
+    }, 250);
+  }
+
+  function updateCounter() {
+    el.counter.textContent = (state.index + 1) + ' / ' + state.images.length;
+  }
+
+  function wrap(i) {
+    var len = state.images.length;
+    return ((i % len) + len) % len;
+  }
+
+  // ── Navigation ─────────────────────────────────────────────────
+
+  function next() { show(state.index + 1); }
+  function prev() { show(state.index - 1); }
+
+  // ── Fullscreen ─────────────────────────────────────────────────
+
+  function toggleFullscreen() {
+    if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+      var el = document.documentElement;
+      (el.requestFullscreen || el.webkitRequestFullscreen).call(el);
+    } else {
+      (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    }
+  }
+
+  // ── Events ─────────────────────────────────────────────────────
+
+  function bindEvents() {
+    document.getElementById('nav-next').addEventListener('click', next);
+    document.getElementById('nav-prev').addEventListener('click', prev);
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+      if (e.key === ' ') { e.preventDefault(); toggleFullscreen(); }
+    });
+
+    var touchStartX = 0;
+    var touchStartY = 0;
+    document.addEventListener('touchstart', function (e) {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+
+    document.addEventListener('touchend', function (e) {
+      var dx = e.changedTouches[0].clientX - touchStartX;
+      var dy = e.changedTouches[0].clientY - touchStartY;
+
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+        dx < 0 ? next() : prev();
+      }
+    }, { passive: true });
+  }
+
+  // ── Error ──────────────────────────────────────────────────────
+
+  function showError(msg) {
+    el.error.textContent = msg;
+    el.error.style.display = 'flex';
+  }
+
+  // ── Init ───────────────────────────────────────────────────────
+
+  function init() {
+    var params = new URLSearchParams(location.search);
+    state.folder = params.get('folder') || null;
+
+    loadImages(state.folder)
+      .then(function (images) {
+        if (!images || !images.length) {
+          console.error('[logjam] no images returned from any source');
+          showError('No images found.');
+          return;
+        }
+        console.log('[logjam] loaded', images.length, 'images, starting viewer');
+        state.images = images;
+        show(0);
+        bindEvents();
+      })
+      .catch(function (err) {
+        console.error('[logjam] init failed:', err);
+        showError('Failed to load images.');
+      });
+  }
+
+  // ── Public API for future extensions ───────────────────────────
+
+  window.logjam = {
+    state: state,
+    next: next,
+    prev: prev,
+    show: show,
+    reload: init
+  };
+
+  init();
+})();
 </script>
-
 </body>
 </html>
