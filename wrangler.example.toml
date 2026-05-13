@@ -1,0 +1,26 @@
+name = "yakov-viewer"
+compatibility_date = "2026-05-12"
+pages_build_output_dir = "out"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "yakov_archive"
+database_id = "replace-with-d1-database-id"
+
+[[r2_buckets]]
+binding = "PUBLIC_ASSETS"
+bucket_name = "yakov-public-assets"
+
+[[r2_buckets]]
+binding = "PRIVATE_ASSETS"
+bucket_name = "yakov-private-assets"
+
+[[queues.producers]]
+binding = "IMAGE_PROCESSING"
+queue = "yakov-image-processing"
+
+[vars]
+NEXT_PUBLIC_SITE_URL = "https://yakov.shmol.cc"
+NEXT_PUBLIC_ASSET_BASE_URL = "https://assets.yakov.shmol.cc"
+NEXT_PUBLIC_IMAGE_TRANSFORM_BASE_URL = "https://yakov.shmol.cc"
+

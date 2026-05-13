@@ -1,0 +1,31 @@
+{
+  "name": "yakov-shmol-photo-portfolio",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "next dev",
+    "validate:content": "node --import tsx scripts/validate-content.ts",
+    "admin:preview-cache": "node --import tsx scripts/generate-admin-preview-cache.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings=0",
+    "build": "next build",
+    "check": "pnpm validate:content && pnpm typecheck && pnpm lint && pnpm build"
+  },
+  "dependencies": {
+    "lucide-react": "latest",
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "eslint": "^9.39.1",
+    "eslint-config-next": "latest",
+    "tsx": "latest",
+    "typescript": "latest"
+  }
+}

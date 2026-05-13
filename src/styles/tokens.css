@@ -1,0 +1,94 @@
+:root {
+  color-scheme: light dark;
+
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 34px;
+  --radius-pill: 999px;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --space-20: 5rem;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", sans-serif;
+  --font-display: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI", sans-serif;
+
+  --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --duration-fast: 140ms;
+  --duration-normal: 240ms;
+  --duration-slow: 420ms;
+
+  --bg: #050505;
+  --bg-muted: #10100f;
+  --bg-elevated: rgba(18, 18, 17, 0.74);
+  --bg-strong: #000000;
+  --text: #f5f5f3;
+  --text-muted: #a4a49e;
+  --text-soft: #6f6f68;
+  --border: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.22);
+  --accent: #ffffff;
+  --accent-muted: #d9d9d2;
+  --shadow-soft: 0 24px 80px rgba(0, 0, 0, 0.5);
+  --focus: #f4f0dd;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f7f7f4;
+    --bg-muted: #ecece7;
+    --bg-elevated: rgba(255, 255, 252, 0.78);
+    --bg-strong: #ffffff;
+    --text: #080808;
+    --text-muted: #62625b;
+    --text-soft: #8b8a82;
+    --border: rgba(0, 0, 0, 0.12);
+    --border-strong: rgba(0, 0, 0, 0.22);
+    --accent: #111111;
+    --accent-muted: #2f2f2a;
+    --shadow-soft: 0 24px 80px rgba(0, 0, 0, 0.1);
+    --focus: #191815;
+  }
+}
+
+[data-theme="light"] {
+  --bg: #f7f7f4;
+  --bg-muted: #ecece7;
+  --bg-elevated: rgba(255, 255, 252, 0.78);
+  --bg-strong: #ffffff;
+  --text: #080808;
+  --text-muted: #62625b;
+  --text-soft: #8b8a82;
+  --border: rgba(0, 0, 0, 0.12);
+  --border-strong: rgba(0, 0, 0, 0.22);
+  --accent: #111111;
+  --accent-muted: #2f2f2a;
+  --shadow-soft: 0 24px 80px rgba(0, 0, 0, 0.1);
+  --focus: #191815;
+}
+
+[data-theme="dark"] {
+  --bg: #050505;
+  --bg-muted: #10100f;
+  --bg-elevated: rgba(18, 18, 17, 0.74);
+  --bg-strong: #000000;
+  --text: #f5f5f3;
+  --text-muted: #a4a49e;
+  --text-soft: #6f6f68;
+  --border: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.22);
+  --accent: #ffffff;
+  --accent-muted: #d9d9d2;
+  --shadow-soft: 0 24px 80px rgba(0, 0, 0, 0.5);
+  --focus: #f4f0dd;
+}
