@@ -138,7 +138,7 @@ The import must be idempotent so it can be tested without duplicating rows or R2
 7. Completed remotely: technical OpenNext Worker, R2 incremental cache, active asset
    domain, and clean-browser media QA.
 8. Completed remotely: `yakov.shmol.cc` now routes to the verified Worker.
-9. In progress locally: viewing polish, reverse film order, and first public tag routes.
+9. Completed remotely: viewing polish, reverse film order, and first public tag routes.
 10. Next: configure Cloudflare Access, enable the external admin, and switch the admin
    repository from local persistence to the full Cloudflare API as one coherent unit.
 11. Later: derivative processing, expanded/download tiers, multi-tag archive filtering,
