@@ -2,32 +2,87 @@
 
 ## Purpose
 
-The first admin UI uses local mock data. The next milestone replaces that mock repository with Cloudflare Pages Functions backed by D1, R2, and Queues.
+The first admin UI uses local data. The next milestone adds OpenNext Route Handlers backed by D1 and R2; Queues remain optional until derivative processing needs them.
 
 This file records the first API shape so the UI, D1 schema, and Cloudflare bindings move in the same direction.
 
-## Admin Endpoints
+## Implemented Admin Endpoints
 
 ```txt
 GET  /api/admin/archive
-GET  /api/admin/sets
 GET  /api/admin/albums
-GET  /api/admin/tags
 POST /api/admin/albums
-PATCH /api/admin/sets/:id
-POST /api/admin/uploads/sign
+POST /api/admin/albums/:albumId/photos
+GET  /api/admin/assets/:assetId
 ```
 
-First implemented stubs:
+These are typed Next.js Route Handlers using Worker bindings. The first upload path is
+direct multipart through the protected Worker. A signed/direct-to-R2 flow is a future
+optimization, not part of the first working contract.
 
-- `functions/api/admin/archive.js`
-- `functions/api/admin/sets.js`
-- `functions/api/admin/sets/[id].js`
-- `functions/api/admin/albums.js`
-- `functions/api/admin/tags.js`
-- `functions/api/admin/uploads/sign.js`
+`GET /api/admin/archive` returns the complete normalized archive for the admin.
 
-`/api/admin/uploads/sign` intentionally returns `501 not_wired` until D1/R2 bindings exist. It validates the intended JPEG-only request shape so frontend work can continue safely.
+`POST /api/admin/albums` accepts JSON:
+
+```json
+{
+  "title": "Film 073",
+  "subtitle": "Bangkok, 2025"
+}
+```
+
+`POST /api/admin/albums/:albumId/photos` accepts `multipart/form-data` fields:
+
+```txt
+file    JPEG file, maximum 20 MiB
+width   positive integer
+height  positive integer
+title   optional
+```
+
+The Worker checks MIME type and JPEG magic bytes, writes the unchanged source file to
+private R2, then creates canonical `Photo`, `AlbumPhoto`, `Asset`, and `UploadJob` rows.
+If the D1 batch fails, the newly written R2 object is deleted.
+
+`GET /api/admin/assets/:assetId` streams an asset through the protected Worker. Private
+assets are returned with `Cache-Control: private, no-store`.
+
+## Planned Mutation Endpoints
+
+```txt
+PATCH  /api/admin/albums/:albumId
+PATCH  /api/admin/photos/:photoId
+POST   /api/admin/photos/:photoId/albums
+DELETE /api/admin/photos/:photoId/albums/:albumId
+POST   /api/admin/sets
+PATCH  /api/admin/sets/:setId
+POST   /api/admin/tags
+PATCH  /api/admin/settings
+POST   /api/admin/bin/:itemId/restore
+DELETE /api/admin/bin/:itemId
+```
+
+The visible admin remains on the local repository until the essential mutation set is
+implemented. Activating a partial adapter would make some controls persistent and
+others browser-only, which is deliberately avoided.
+
+Implemented infrastructure endpoint:
+
+```txt
+GET /api/health
+```
+
+It reports only whether expected bindings are present and never returns IDs, values, keys, or secrets.
+
+## Shared Archive Shape
+
+```txt
+Photo       -> canonical metadata and Asset ownership
+AlbumPhoto  -> albumId, photoId, album-specific position
+Album       -> publication, tags, covers, set membership
+```
+
+Adding an existing photo to another album creates only an `AlbumPhoto` row. Hiding or deleting a canonical photo affects every album appearance. Purging an album deletes media only for photos that have no remaining album memberships.
 
 ## Public Endpoints
 
@@ -37,38 +92,24 @@ GET /api/public/albums
 GET /api/public/photos
 ```
 
-First implemented stub:
-
-- `functions/api/public/sets.js`
-
 Public endpoints must only return published records and public asset URLs. They must never return private R2 keys, `sourceJpeg`, RAW/RAF/TIFF, or sensitive EXIF.
-
-## Request Defaults
-
-Upload signing request:
-
-```json
-{
-  "albumId": "album-film-073",
-  "files": [
-    {
-      "fileName": "000035300041.jpg",
-      "bytes": 12800000,
-      "mimeType": "image/jpeg",
-      "position": 0
-    }
-  ]
-}
-```
 
 Rules:
 
 - first upload milestone accepts JPEG only;
 - source JPEG goes to private R2;
-- derivatives go to public R2;
+- no derivative is claimed until processing actually creates it;
 - album/photo records start as draft/review;
 - upload order becomes initial photo position;
-- image processing job creates `thumb`, `display`, `expanded`, and `downloadJpeg`.
+- later image processing creates `thumb`, `display`, optional `expanded`, and optional
+  `downloadJpeg` in public R2.
+
+## Access
+
+On localhost, the API permits requests so the full flow can be tested with local D1
+and R2. On any external hostname, every admin endpoint requires the
+`Cf-Access-Authenticated-User-Email` header to match the configured `ADMIN_EMAIL`.
+Missing Access configuration fails closed.
 
 ## Secrets
 

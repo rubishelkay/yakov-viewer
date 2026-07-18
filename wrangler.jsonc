@@ -1,0 +1,51 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "yakov-viewer",
+  "main": ".open-next/worker.js",
+  "workers_dev": true,
+  "preview_urls": true,
+  "routes": [
+    {
+      "pattern": "yakov.shmol.cc/*",
+      "zone_name": "shmol.cc"
+    }
+  ],
+  "compatibility_date": "2026-07-17",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "yakov_archive",
+      "database_id": "ef77bda3-ed15-4ae5-8bde-17cfea8bb0e5",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "PUBLIC_ASSETS",
+      "bucket_name": "yakov-public-assets"
+    },
+    {
+      "binding": "PRIVATE_ASSETS",
+      "bucket_name": "yakov-private-assets"
+    },
+    {
+      "binding": "NEXT_INC_CACHE_R2_BUCKET",
+      "bucket_name": "yakov-next-cache"
+    }
+  ],
+  "vars": {
+    "ADMIN_ACCESS_ENABLED": "false",
+    "ADMIN_EMAIL": "Jacobjshmol@gmail.com",
+    "NEXT_PUBLIC_SITE_URL": "https://yakov.shmol.cc",
+    "NEXT_PUBLIC_ASSET_BASE_URL": "https://assets.yakov.shmol.cc",
+    "NEXT_PUBLIC_IMAGE_TRANSFORM_BASE_URL": "https://yakov.shmol.cc"
+  }
+}

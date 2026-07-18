@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS archive_albums (
   subtitle TEXT NOT NULL DEFAULT '',
   description TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL CHECK (status IN ('draft', 'review', 'published', 'hidden', 'trash', 'deleted')),
+  is_demo INTEGER NOT NULL DEFAULT 0,
   public_download_policy TEXT NOT NULL CHECK (public_download_policy IN ('inherit', 'none', 'expanded', 'downloadJpeg')),
   cover_landscape_asset_id TEXT,
   cover_portrait_asset_id TEXT,
@@ -41,12 +42,10 @@ CREATE TABLE IF NOT EXISTS archive_albums (
 
 CREATE TABLE IF NOT EXISTS archive_photos (
   id TEXT PRIMARY KEY,
-  album_id TEXT NOT NULL REFERENCES archive_albums(id) ON DELETE CASCADE,
   slug TEXT NOT NULL UNIQUE,
   title TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL CHECK (status IN ('draft', 'review', 'published', 'hidden', 'trash', 'deleted')),
-  position INTEGER NOT NULL DEFAULT 0,
   frame_number INTEGER,
   public_download_override TEXT CHECK (public_download_override IN ('inherit', 'none', 'expanded', 'downloadJpeg')),
   date_taken TEXT,
@@ -59,6 +58,14 @@ CREATE TABLE IF NOT EXISTS archive_photos (
   published_at TEXT,
   hidden_at TEXT,
   deleted_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS album_photos (
+  album_id TEXT NOT NULL REFERENCES archive_albums(id) ON DELETE CASCADE,
+  photo_id TEXT NOT NULL REFERENCES archive_photos(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (album_id, photo_id)
 );
 
 CREATE TABLE IF NOT EXISTS archive_assets (
@@ -156,8 +163,9 @@ CREATE TABLE IF NOT EXISTS trash_items (
 
 CREATE INDEX IF NOT EXISTS idx_archive_sets_status_order ON archive_sets(status, sort_order);
 CREATE INDEX IF NOT EXISTS idx_archive_albums_status_order ON archive_albums(status, sort_order);
-CREATE INDEX IF NOT EXISTS idx_archive_photos_album_position ON archive_photos(album_id, position);
 CREATE INDEX IF NOT EXISTS idx_archive_photos_status ON archive_photos(status);
+CREATE INDEX IF NOT EXISTS idx_album_photos_album_position ON album_photos(album_id, position);
+CREATE INDEX IF NOT EXISTS idx_album_photos_photo ON album_photos(photo_id);
 CREATE INDEX IF NOT EXISTS idx_archive_assets_photo_version ON archive_assets(photo_id, version);
 CREATE INDEX IF NOT EXISTS idx_set_albums_set_position ON set_albums(set_id, position);
 CREATE INDEX IF NOT EXISTS idx_upload_jobs_album_status ON upload_jobs(album_id, status);

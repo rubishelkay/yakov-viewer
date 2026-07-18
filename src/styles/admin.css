@@ -580,6 +580,48 @@
   text-transform: uppercase;
 }
 
+.admin-row-badges,
+.admin-tile-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.admin-row-badges {
+  justify-content: flex-end;
+}
+
+.admin-tile-title-row strong {
+  min-width: 0;
+}
+
+.admin-demo-badge {
+  width: fit-content;
+  border: 1px solid rgba(244, 240, 221, 0.18);
+  border-radius: 999px;
+  padding: 5px 7px;
+  background: rgba(244, 240, 221, 0.055);
+  color: rgba(244, 240, 221, 0.78);
+  font-size: 0.62rem;
+  font-weight: 740;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.admin-linked-badge {
+  width: fit-content;
+  border: 1px solid rgba(153, 194, 255, 0.2);
+  border-radius: 999px;
+  padding: 5px 7px;
+  background: rgba(153, 194, 255, 0.07);
+  color: rgba(184, 210, 255, 0.9);
+  font-size: 0.62rem;
+  font-weight: 740;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
 .admin-status[data-status="published"] {
   border-color: rgba(219, 232, 200, 0.22);
   color: var(--admin-good);
@@ -2211,11 +2253,14 @@
   background: var(--admin-surface-2);
 }
 
-.admin-library-photo span {
+.admin-library-photo > .admin-library-photo__meta {
   position: absolute;
   left: 7px;
   right: 7px;
   bottom: 7px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   overflow: hidden;
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.58);
@@ -2223,8 +2268,30 @@
   padding: 5px 8px;
   font-size: 0.63rem;
   font-weight: 680;
+}
+
+.admin-library-photo__meta > span:first-child {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.admin-library-photo__meta .admin-demo-badge {
+  flex: 0 0 auto;
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.82);
+  padding: 3px 5px;
+  font-size: 0.55rem;
+}
+
+.admin-library-photo__meta .admin-linked-badge {
+  flex: 0 0 auto;
+  border-color: rgba(153, 194, 255, 0.18);
+  background: rgba(153, 194, 255, 0.1);
+  padding: 3px 5px;
+  font-size: 0.55rem;
 }
 
 .admin-linked-list {
@@ -2232,7 +2299,8 @@
   gap: 7px;
 }
 
-.admin-linked-list button {
+.admin-linked-list button,
+.admin-linked-list > div {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2244,6 +2312,10 @@
   cursor: pointer;
   padding: 9px 10px;
   text-align: left;
+}
+
+.admin-linked-list > div {
+  cursor: default;
 }
 
 .admin-linked-list small {

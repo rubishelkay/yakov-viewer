@@ -1,8 +1,10 @@
 # Image Pipeline
 
-## Current MVP
+## Confirmed Baseline
 
-The first MVP uses the existing R2 `r2.dev` image URLs as seed content. Production should move public assets to `assets.yakov.shmol.cc`.
+The accepted frontend source contains 9 real albums and 312 real photos. Its prepared JPEGs are around 2000 pixels, average about 1.6 MB, and are suitable as the first public `expanded`-quality import. They must be imported to R2, not copied into this repository.
+
+Typical future admin uploads will also be web-prepared JPEGs around 2000 pixels and 3-5 MB. Full 30-50 MB originals normally stay outside Cloudflare, for example on Google Drive. The model still supports optional larger JPEG and RAW/TIFF masters later.
 
 Images are represented in typed content with:
 
@@ -14,7 +16,7 @@ Images are represented in typed content with:
 - R2 `assetBaseUrl` and `originalKey`;
 - `rights.downloadAllowed` and optional `downloadUrl`.
 
-This is a temporary MVP model. The next phase should replace the single original image reference with explicit asset versions.
+The current public content model is temporary. The integration phase replaces the single original image reference with explicit asset versions backed by the shared archive model.
 
 ## Temporary Local Admin Preview Cache
 
@@ -47,20 +49,39 @@ sourceJpeg
 master
 ```
 
-Recommended meaning:
+Confirmed working targets:
 
-- `thumb`: public preview, usually under 100 KB;
-- `display`: public viewing image, usually around 500 KB to 1.2 MB;
-- `expanded`: public high-quality viewing image, usually around 2 MB to 3 MB;
-- `downloadJpeg`: optional public download/open file, usually around 3 MB to 4 MB;
-- `sourceJpeg`: uploaded high-resolution JPEG, usually 5 MB to 30 MB, private/admin by default;
+- `thumb`: public preview, target up to 300 KB;
+- `display`: public viewing image, target around 1 MB;
+- `expanded`: public high-quality viewing image, target around 2-3 MB when the source contains enough data;
+- `downloadJpeg`: optional future public download/open file, allowed up to about 20 MB;
+- `sourceJpeg`: uploaded JPEG, commonly around 2000 px and 3-5 MB, private/admin by default;
 - `master`: optional private RAW/RAF/TIFF/full panorama, stored only for selected photos.
 
 The uploaded `sourceJpeg` should be stored as uploaded unless the admin explicitly requests normalization. It is the main high-quality archive asset for the admin, not something the public site should casually load.
 
 The master file is private in the current product phase. Later, selected master downloads can be added for approved users.
 
-Public download/open access should normally use `downloadJpeg` or `expanded`, depending on global/admin settings. The system should leave room to change this decision later without redesigning the database.
+The first integrated public frontend does not add a download control. Public download/open access remains modeled for a later iteration and should use `downloadJpeg` or `expanded`, never expose `master` by accident.
+
+## First Upload Slice
+
+The first tested Cloudflare-backed uploader stores exactly one asset version:
+
+```txt
+sourceJpeg -> private R2, preserved byte-for-byte
+```
+
+It records the canonical photo, album membership, private asset, and upload job in D1.
+It does not create placeholder `thumb`, `display`, or `expanded` rows. Those versions
+will be added only when the derivative processor writes real files to public R2.
+
+The initial Worker endpoint accepts JPEG files up to 20 MiB. That limit covers the
+current expected 3-5 MB uploads and can be revisited before large source JPEG or master
+uploads. RAW/RAF/TIFF remains represented by `master` in the model but is not accepted
+by this endpoint.
+
+Do not upscale or inflate a 2000 px upload merely to hit a byte target. Targets are upper guidance, not required file sizes.
 
 ## Color And Metadata Policy
 
@@ -105,7 +126,7 @@ uploaded large JPEG
   -> store sourceJpeg privately
   -> generate thumb
   -> generate display
-  -> generate expanded public preview
+  -> generate expanded public preview only when useful
   -> generate downloadJpeg if configured
   -> generate cover crops when selected
   -> extract dimensions/color metadata
@@ -114,6 +135,8 @@ uploaded large JPEG
 ```
 
 RAW/RAF/TIFF ingestion is a later phase. The data model should allow it, but the first admin should focus on large JPEG uploads.
+
+Google Drive remains an external originals archive for now. Automatic Drive synchronization is explicitly out of scope until the R2/D1 upload path is stable.
 
 ## Rules
 

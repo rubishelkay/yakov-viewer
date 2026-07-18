@@ -66,6 +66,7 @@ export const archiveAlbumSchema = z.object({
   subtitle: z.string().default(""),
   description: z.string().default(""),
   status: archiveStatusSchema,
+  isDemo: z.boolean().default(false),
   setIds: z.array(z.string().min(1)).default([]),
   tagIds: z.array(z.string().min(1)).default([]),
   publicDownloadPolicy: publicDownloadPolicySchema,
@@ -84,16 +85,19 @@ export const archiveAlbumSchema = z.object({
   deletedAt: timestampSchema.optional()
 });
 
+export const albumPhotoSchema = z.object({
+  albumId: z.string().min(1),
+  photoId: z.string().min(1),
+  position: z.number().int().positive(),
+  createdAt: timestampSchema
+});
+
 export const archivePhotoSchema = z.object({
   id: z.string().min(1),
-  albumId: z.string().min(1),
-  originAlbumId: z.string().min(1).optional(),
   slug: z.string().min(1),
-  sourcePhotoId: z.string().min(1).optional(),
   title: z.string().min(1),
   description: z.string().default(""),
   status: archiveStatusSchema,
-  position: z.number().int().nonnegative(),
   frameNumber: z.number().int().positive().optional(),
   tagIds: z.array(z.string().min(1)).default([]),
   assetIds: z.array(z.string().min(1)).default([]),
@@ -212,6 +216,7 @@ export const uploadJobSchema = z.object({
 export const adminArchiveSchema = z.object({
   sets: z.array(archiveSetSchema),
   albums: z.array(archiveAlbumSchema),
+  albumPhotos: z.array(albumPhotoSchema),
   photos: z.array(archivePhotoSchema),
   assets: z.array(archiveAssetSchema),
   tags: z.array(archiveTagSchema),
@@ -228,6 +233,7 @@ export type TagScope = z.infer<typeof tagScopeSchema>;
 export type PublicDownloadPolicy = z.infer<typeof publicDownloadPolicySchema>;
 export type ArchiveSet = z.infer<typeof archiveSetSchema>;
 export type ArchiveAlbum = z.infer<typeof archiveAlbumSchema>;
+export type ArchiveAlbumPhoto = z.infer<typeof albumPhotoSchema>;
 export type ArchivePhoto = z.infer<typeof archivePhotoSchema>;
 export type ArchiveAsset = z.infer<typeof archiveAssetSchema>;
 export type ArchiveTag = z.infer<typeof archiveTagSchema>;

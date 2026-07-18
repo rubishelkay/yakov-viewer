@@ -1,0 +1,319 @@
+# Yakov Viewer Working Rails
+
+This document records how we work on the project so the plan does not live only in chat history.
+
+## Current Decision
+
+Use one main Codex chat for the project until the first real upload milestone is complete.
+
+The project is still one tightly coupled system:
+
+- admin UX;
+- archive data model;
+- local repository layer;
+- Cloudflare API contract;
+- R2 file layout;
+- D1 schema;
+- image pipeline;
+- public portfolio views.
+
+Splitting into two permanent chats now would create more coordination cost than value.
+
+## Claude / Second Opinion
+
+Claude is not a second worker by default. Use Claude only as a short read-only reviewer when:
+
+- the user explicitly asks for Claude / Opus;
+- the decision is architecture, migration, security, or Cloudflare-risky;
+- Codex is choosing between two approaches and wants a compact second opinion;
+- a risky diff is about to be finalized.
+
+Do not send the whole repository. Send only the goal, constraints, relevant paths, compact summary, and exact question.
+
+## When A Second Chat Becomes Useful
+
+Open a separate backend/Cloudflare chat only after this milestone works end to end:
+
+```txt
+create album
+  -> select JPEG
+  -> upload source JPEG to R2
+  -> create D1 photo/asset records
+  -> generate or register web derivatives
+  -> reload admin
+  -> see the uploaded photo from Cloudflare-backed data
+```
+
+After that, backend work can be separated because the contract will be real instead of hypothetical.
+
+Good future split:
+
+- main chat: product, admin UX, public portfolio, data contract, release decisions;
+- backend chat: D1 migrations, R2 lifecycle, Cloudflare Access, signed uploads, queues, operational deployment.
+
+## Source Of Truth
+
+The source of truth is the repository, not chat memory.
+
+Important decisions should be written into docs:
+
+- `docs/project-decisions-ru.md` for product decisions in Russian;
+- `docs/admin-architecture.md` for admin/storage architecture;
+- `docs/admin-api-contract.md` for API shape;
+- `docs/image-pipeline.md` for photo versions and processing;
+- `docs/cloudflare-setup.md` for Cloudflare setup;
+- this file for collaboration/workflow rules.
+
+## Current Stage
+
+The current branch is:
+
+```txt
+codex/admin-mvp
+```
+
+Current status:
+
+- Next.js public routes remain prerender-first where practical.
+- Public/admin route split exists.
+- Admin is local-first.
+- Metadata persists in `localStorage`.
+- JPEG previews persist in IndexedDB.
+- Unused Cloudflare Pages Function stubs have been removed.
+- D1 migration draft exists.
+- The first local Cloudflare-backed slice is working: D1 archive reads, album creation,
+  private R2 JPEG upload, D1 metadata writes, and authenticated asset reads.
+- The visible admin still uses the local browser repository until all essential edit
+  mutations have Cloudflare API equivalents; this avoids a mixed persistence model.
+- A finished external Vite frontend has been accepted as the public visual contract.
+- It contains 9 real albums and 312 real photos that will become the first R2/D1 import.
+- Its homepage, album index, S/M/L album views, and viewer are now integrated locally into the Next.js public routes.
+- The public routes and admin currently share one local archive seed; development media
+  can come from the external Fable server, while production media now comes from R2 and
+  remains outside Git.
+- Canonical `AlbumPhoto` memberships now control multi-album reuse and album-specific ordering without duplicating Photo or Asset records.
+- localStorage archives migrate from version 3 to version 4 automatically; IndexedDB preview blobs keep their existing IDs.
+- The long-term deployment target is now one Next.js/OpenNext Cloudflare Worker, not static Pages export.
+- OpenNext configuration, compact binding types, local D1/R2 emulation, and `/api/health` now work.
+- `0001_archive.sql` passes a local D1 migration and foreign-key check.
+- The generated Worker passes local `workerd` checks for public, admin, and API routes.
+- Production `yakov_archive` now contains the first 9 albums, 312 photos, and 624 real
+  thumb/display assets with a clean foreign-key check.
+- The technical OpenNext Worker is live and uses a dedicated R2 incremental cache.
+- `assets.yakov.shmol.cc` is active, and `yakov.shmol.cc/*` now routes to the verified
+  OpenNext Worker. The old Pages project remains detached but available for rollback.
+- External admin access stays disabled until Cloudflare Access is configured.
+
+## Immediate Roadmap
+
+### 0. Current Preparation Pass
+
+Goal: keep the next work from drifting before touching Cloudflare.
+
+Current decisions:
+
+- polish admin UX before real R2/D1 upload;
+- keep the work in one main chat for now;
+- use fake/demo albums as long-lived development fixtures, not as throwaway accidents;
+- first real upload is JPEG-only, with RAW/RAF/TIFF represented in the model for later private/master storage;
+- Codex should prepare Cloudflare setup checklists first. The owner can create resources in the Cloudflare dashboard when automation is brittle or blocked.
+
+Done when:
+
+- the roadmap and open decisions are written in repo docs;
+- the next implementation pass has a small, testable scope;
+- no server, Cloudflare resource, or git push is triggered accidentally.
+
+### 1. Stabilize Local Admin UX
+
+Goal: make the admin comfortable enough to use before real storage.
+
+Focus:
+
+- albums;
+- sets;
+- all photos;
+- tags with autocomplete;
+- bin/delete flow;
+- cover priority and cover assignment;
+- photo ordering;
+- bulk album work, including 30-40 photo albums and several albums in one session;
+- local reset/seed behavior.
+
+Done when:
+
+- a 30-40 photo album is usable without visual clutter;
+- creating several albums in a row feels predictable;
+- reload keeps local state;
+- hidden/delete/bin behavior is predictable;
+- no decorative controls pretend to work.
+
+### 2. Freeze Shared Archive Contract
+
+Goal: make one TypeScript model that local admin, D1, and public API can share.
+
+Status: canonical `Photo + AlbumPhoto` relation completed locally and reflected in the D1 draft. The remaining contract work is the Cloudflare repository/API implementation.
+
+Focus:
+
+- `Set`;
+- `Album`;
+- `Photo`;
+- `Asset`;
+- `Tag`;
+- `Collection`;
+- `AdminSettings`;
+- statuses;
+- IDs and slugs;
+- inherited tags;
+- album/photo/set ordering.
+- canonical photos with `AlbumPhoto` membership so one photo can appear in several albums without duplicate assets.
+
+Done when:
+
+- UI code does not invent data fields ad hoc;
+- D1 migration matches the frontend contract;
+- docs and types use the same naming.
+
+### 3. Keep Data Access Behind Repository Interfaces
+
+Goal: make Cloudflare replacement possible without rewriting UI.
+
+Current local implementation:
+
+```txt
+Admin UI
+  -> admin repository interface
+  -> localStorage + IndexedDB
+```
+
+Future implementation:
+
+```txt
+Admin UI
+  -> admin repository interface
+  -> /api/admin/*
+  -> D1 + R2 + queue/image processing
+```
+
+Done when:
+
+- UI components do not directly know storage details;
+- local repository and future Cloudflare repository can expose the same actions.
+
+### 4. Integrate The Accepted Public Frontend
+
+Goal: preserve the accepted Vite design while making all homepage and album content come from the shared archive model.
+
+Status: local parity checkpoint completed. Cloudflare-backed data and final visual acceptance remain.
+
+Focus:
+
+- port the fullscreen hero, album index, S/M/L album views, and viewer;
+- drive the homepage from published admin Sets;
+- keep All Photos and public downloads out of the first parity milestone;
+- use fixtures until the Cloudflare-backed repository is ready;
+- do not copy the source media into Git.
+
+### 5. First Real Cloudflare Upload
+
+Goal: one real JPEG upload path, not the full final system.
+
+Minimum flow:
+
+```txt
+create album
+  -> send JPEG to the protected Worker endpoint
+  -> Worker writes source JPEG to private R2
+  -> Worker writes Photo, AlbumPhoto, Asset, and UploadJob rows to D1
+  -> admin reloads the archive through the Cloudflare API adapter
+```
+
+The first implementation intentionally uses a direct multipart request through the
+protected Worker. This is simpler to validate end to end. Presigned/direct-to-R2
+uploads can replace it later if file sizes or concurrent uploads require that change.
+Do not create fake derivative records: until processing exists, only `sourceJpeg` is
+recorded.
+
+Immediate implementation order:
+
+1. Completed locally: typed D1 queries and `GET /api/admin/archive`.
+2. Completed locally: album creation against D1.
+3. Completed locally: JPEG upload to private R2 with transactional D1 writes and
+   compensating R2 deletion if the database write fails.
+4. Completed locally: typed client boundary for archive reads, album creation, JPEG
+   upload, and private asset reads.
+5. Next: add the remaining album/photo/set/tag/settings/bin mutations, then switch the
+   whole admin repository as one coherent unit.
+6. Completed: production resources, migration, first real album/media import, technical
+   Worker deployment, and asset-domain verification.
+7. Completed: switch the public hostname to the verified Worker Route.
+8. Next: configure Access, finish mutation parity, and move the visible admin to the
+   Cloudflare repository as one coherent unit.
+
+Cloudflare setup approach:
+
+- Codex prepares exact resource names, bindings, env var names, and dashboard steps;
+- the owner can create or confirm Cloudflare resources manually;
+- Codex uses Wrangler/Cloudflare API for Cloudflare changes, not browser automation by
+  default. Every remote mutation still gets a short pre-action brief and explicit
+  confirmation.
+
+### 6. Image Derivatives
+
+Goal: generate/register the real file versions.
+
+Target versions:
+
+```txt
+thumb
+display
+expanded
+downloadJpeg
+sourceJpeg
+master later
+```
+
+First real version can be JPEG-only. RAW/RAF/TIFF stays future/private.
+
+The first uploader should still model `master` assets so selected RAW/RAF/TIFF files can be attached later without redesigning albums or photos.
+
+### 7. Import The Accepted Real Albums
+
+Goal: import the 9 albums and 312 prepared JPEGs from the accepted frontend into D1/R2 through an idempotent importer.
+
+### 8. Public Portfolio From Cloudflare Data
+
+Goal: public pages read published sets/albums/photos safely.
+
+Focus:
+
+- homepage from published sets;
+- album pages;
+- all photos with AND tag filtering;
+- photo detail pages;
+- responsive image URLs;
+- no private/source assets exposed.
+
+## Safety Rules Before Push Or Deploy
+
+Run:
+
+```txt
+pnpm check
+git status -sb
+```
+
+Also check:
+
+- no `.env` or secrets;
+- no Cloudflare tokens;
+- no R2 keys;
+- no RAW/TIFF/source originals;
+- no generated derivatives;
+- no `node_modules`;
+- no `.next`;
+- no `out`;
+- no unintended large files.
+
+Before externally visible actions, give the user a short brief because voice dictation can contain transcription mistakes.

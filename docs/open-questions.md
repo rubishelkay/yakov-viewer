@@ -2,6 +2,22 @@
 
 These are the current questions to resolve before implementing the admin/backend phase.
 
+## Recently Resolved
+
+1. Keep one main Codex chat/workstream until the first real R2/D1 upload works end to end.
+2. Polish the local admin UX before wiring Cloudflare storage.
+3. First real upload accepts JPEG only; RAW/RAF/TIFF stays modeled as future private `master` assets.
+4. Demo/fake albums can remain as development fixtures and be deleted later from the admin.
+5. Codex should prepare exact Cloudflare setup steps first; the owner may create resources manually if MCP/API automation is unreliable.
+6. The accepted Fable frontend is the public visual source of truth; no Figma pass is required before integration.
+7. Its 9 albums and 312 photos are real starting content and will be imported to D1/R2 without committing media to Git.
+8. Homepage content is driven by admin-managed sets.
+9. Deploy the combined Next.js app through Cloudflare Workers/OpenNext rather than keeping static Pages as the long-term architecture.
+10. A canonical photo may belong to multiple albums through `AlbumPhoto` membership rows.
+11. The first integrated public frontend stays intentionally minimal; All Photos and public downloads come later.
+12. Typical uploads are 2000 px JPEGs around 3-5 MB; targets are thumb <=300 KB and display around 1 MB.
+13. A photo inherits effective public tags from every published album membership, plus its direct photo tags.
+
 ## Sets And Tags
 
 1. Should public sets be edited only manually, or can the admin later auto-build sets from tag queries?
@@ -18,10 +34,8 @@ These are the current questions to resolve before implementing the admin/backend
 
 ## Photos
 
-1. Should individual photos inherit public download/open permissions from the album by default?
-2. Should hidden photos keep public R2 files in place for the first version?
-3. Should any public large-file URLs be stable, or should larger files always be generated through a Worker route for future revocation?
-4. Should the public all-photos archive use inherited album tags plus direct photo tags for filtering?
+1. Should hidden photos keep public R2 derivative objects in place for the first version, relying on API visibility, or should public delivery require signed/Worker URLs?
+2. Should any future public large-file URLs be stable, or should larger files always be served through a Worker route for revocation?
 
 ## Covers
 
@@ -35,9 +49,10 @@ These are the current questions to resolve before implementing the admin/backend
 1. Should the first admin live under `/admin` in this repo, with the option to split later?
 2. Is Cloudflare Access enough for the first private admin login?
 3. Should delete use a 7-day trash period by default?
-4. Should the admin support bulk metadata edits in the first version?
-5. Should the admin show compact storage totals per album from the first version?
-6. Should global media settings be editable from the first admin version?
+4. What minimum bulk workflow is required before real upload: one album at a time, or creating/uploading several albums in a single session?
+5. Should the admin support bulk metadata edits before Cloudflare upload, or immediately after the first real upload milestone?
+6. Should the admin show compact storage totals per album from the first Cloudflare milestone, or only after derivative generation is stable?
+7. Should global media settings be editable from the first admin version?
 
 ## Image Processing
 
@@ -45,4 +60,4 @@ These are the current questions to resolve before implementing the admin/backend
 2. Should `thumb` and `display` always be sRGB?
 3. Should uploaded source JPEGs always preserve embedded color profiles?
 4. Should public derivatives strip all EXIF or preserve a small whitelist?
-5. Should public download default to `expanded` or `downloadJpeg`?
+5. Which processing engine should create stored derivatives in the first real upload milestone while preserving predictable color?

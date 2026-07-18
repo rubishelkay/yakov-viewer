@@ -26,12 +26,13 @@ import {
   useAdminArchive
 } from "@/admin/admin-state";
 import { formatBytes } from "@/admin/repository";
+import { AdminDemoBadge } from "@/components/admin/AdminDemoBadge";
 import { useAdminConfirmDialog } from "@/components/admin/AdminConfirmDialog";
 import type {
   ArchiveStatus,
   PublicDownloadPolicy
 } from "@/admin/archive-schema";
-import type { LocalArchiveAlbum, LocalArchivePhoto, LocalArchiveTag } from "@/admin/admin-state";
+import type { LocalArchiveAlbum, LocalArchivePhoto, LocalArchivePhotoInAlbum, LocalArchiveTag } from "@/admin/admin-state";
 
 const editableStatuses: ArchiveStatus[] = ["draft", "review", "published", "hidden"];
 const downloadPolicies: PublicDownloadPolicy[] = ["inherit", "none", "expanded", "downloadJpeg"];
@@ -238,9 +239,12 @@ export function AlbumWorkspace() {
                 <CoverImage url={getAlbumCoverPreviewUrlFromArchive(archive, previewUrls, album)} />
                 <span className="admin-list-item__body">
                   <strong>{album.title}</strong>
-                  <small>{photoCount(album.id, archive.photos)} photos · {setCount(album.id, archive.sets)} sets</small>
+                  <small>{photoCount(album.id, archive)} photos · {setCount(album.id, archive.sets)} sets</small>
                 </span>
-                <span className="admin-status" data-status={album.status}>{album.status}</span>
+                <span className="admin-row-badges">
+                  {album.isDemo ? <AdminDemoBadge /> : null}
+                  <span className="admin-status" data-status={album.status}>{album.status}</span>
+                </span>
               </button>
               <button
                 aria-label={`Drag ${album.title} to reorder`}
@@ -271,7 +275,10 @@ export function AlbumWorkspace() {
                 <h2>{selectedAlbum.title}</h2>
                 <p>{selectedAlbum.subtitle || "Upload, review, publish."}</p>
               </div>
-              <span className="admin-status" data-status={selectedAlbum.status}>{selectedAlbum.status}</span>
+              <span className="admin-row-badges">
+                {selectedAlbum.isDemo ? <AdminDemoBadge /> : null}
+                <span className="admin-status" data-status={selectedAlbum.status}>{selectedAlbum.status}</span>
+              </span>
             </div>
 
             <div className="admin-column-stat-grid">
@@ -521,7 +528,7 @@ function PhotoInspector({
   album: LocalArchiveAlbum;
   onTrashPhoto: (photo: LocalArchivePhoto) => Promise<void>;
   onAttachPhotoTag: (label?: string) => Promise<void>;
-  photo: LocalArchivePhoto | undefined;
+  photo: LocalArchivePhotoInAlbum | undefined;
   photoIndex: number;
   photoTagInput: string;
   photosCount: number;
@@ -858,7 +865,7 @@ function PhotoReviewCard({
   onDragStart: () => void;
   onDrop: (photoId: string) => void;
   onSelect: () => void;
-  photo: LocalArchivePhoto;
+  photo: LocalArchivePhotoInAlbum;
 }) {
   const { archive, previewUrls } = useAdminArchive();
   const imageUrl = getPhotoThumbnailUrlFromArchive(archive, previewUrls, photo);
@@ -907,8 +914,8 @@ function getPhotoPreviewAspect(photo: LocalArchivePhoto) {
   return photo.height > photo.width ? "2 / 3" : "3 / 2";
 }
 
-function photoCount(albumId: string, photos: LocalArchivePhoto[]) {
-  return photos.filter((photo) => photo.albumId === albumId && photo.status !== "trash" && photo.status !== "deleted").length;
+function photoCount(albumId: string, archive: ReturnType<typeof useAdminArchive>["archive"]) {
+  return getPhotosForAlbumFromArchive(archive, albumId).length;
 }
 
 function setCount(albumId: string, sets: ReturnType<typeof getOrderedSetsFromArchive>) {

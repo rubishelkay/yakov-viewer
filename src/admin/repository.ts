@@ -30,10 +30,17 @@ export function getAlbumsForSet(set: ArchiveSet): ArchiveAlbum[] {
     .filter((album): album is ArchiveAlbum => Boolean(album));
 }
 
-export function getPhotosForAlbum(albumId: string): ArchivePhoto[] {
-  return adminArchive.photos
-    .filter((photo) => photo.albumId === albumId)
-    .sort((a, b) => a.position - b.position);
+export function getPhotosForAlbum(albumId: string): Array<ArchivePhoto & { position: number }> {
+  const photoById = new Map(adminArchive.photos.map((photo) => [photo.id, photo]));
+
+  return adminArchive.albumPhotos
+    .filter((albumPhoto) => albumPhoto.albumId === albumId)
+    .sort((a, b) => a.position - b.position)
+    .map((albumPhoto) => {
+      const photo = photoById.get(albumPhoto.photoId);
+      return photo ? { ...photo, position: albumPhoto.position } : undefined;
+    })
+    .filter((photo): photo is ArchivePhoto & { position: number } => Boolean(photo));
 }
 
 export function getAssetById(assetId: string | undefined): ArchiveAsset | undefined {
@@ -54,7 +61,7 @@ export function getTagsForAlbum(album: ArchiveAlbum): ArchiveTag[] {
 }
 
 export function getPhotoCountForAlbum(albumId: string): number {
-  return adminArchive.photos.filter((photo) => photo.albumId === albumId).length;
+  return adminArchive.albumPhotos.filter((albumPhoto) => albumPhoto.albumId === albumId).length;
 }
 
 export function getSetCountForAlbum(albumId: string): number {
@@ -131,4 +138,3 @@ export function formatBytes(bytes: number): string {
 
   return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
-

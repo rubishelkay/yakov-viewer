@@ -1,13 +1,13 @@
-import { Footer } from "@/components/layout/Footer";
-import { Header } from "@/components/layout/Header";
+import { AdminArchiveProvider } from "@/admin/admin-state";
+import { PortfolioHeader } from "@/components/portfolio/PortfolioHeader";
 
 export default function PublicLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <>
-      <Header />
-      <main className="site-main">{children}</main>
-      <Footer />
-    </>
+    <AdminArchiveProvider>
+      <div className="portfolio-site">
+        <PortfolioHeader />
+        {children}
+      </div>
+    </AdminArchiveProvider>
   );
 }
-

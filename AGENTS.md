@@ -16,7 +16,7 @@ Logjamming is legacy/private backstage context, not the public product.
 
 ## Engineering Rules
 
-- Keep the public site static-first and deployable to Cloudflare Pages.
+- Keep public routes prerender-first where practical, while deploying the combined public site, admin, and API to Cloudflare Workers through OpenNext.
 - Do not commit high-resolution originals, private imports, `.env`, Cloudflare tokens, or R2 credentials.
 - Do not expose GPS or sensitive EXIF in public content by default.
 - Validate content before build with `pnpm validate:content`.
@@ -29,6 +29,9 @@ Logjamming is legacy/private backstage context, not the public product.
 - The user often dictates requests by voice in noisy environments, so transcribed words can be wrong.
 - Before risky or externally visible actions, provide a very short brief and confirm ambiguous names, domains, paths, and destructive changes.
 - If a phrase sounds inconsistent with the established project direction, ask a concise clarifying question instead of following the transcript literally.
+- Keep Yakov Viewer in one main Codex chat/workstream until the first real upload milestone works end to end: JPEG to R2, metadata to D1, and the uploaded photo visible in the admin from Cloudflare-backed data.
+- Use Claude/Opus as a compact read-only reviewer for risky decisions, not as a parallel implementation owner by default.
+- See `docs/working-rails.md` for the current operating model and roadmap.
 
 ## Commands
 
@@ -38,12 +41,16 @@ Logjamming is legacy/private backstage context, not the public product.
 - Typecheck: `pnpm typecheck`
 - Lint: `pnpm lint`
 - Build: `pnpm build`
+- Cloudflare preview: `pnpm preview`
+- Cloudflare binding types: `pnpm cf-typegen`
+- Local D1 migrations: `pnpm d1:migrate:local`
 - Full check: `pnpm check`
 
 ## Done Means
 
 - Content validation passes.
 - Typecheck, lint, and build pass.
+- The OpenNext Worker build and local `workerd` preview pass before deployment changes.
 - Responsive images use width/height and fixed `srcset` widths.
 - No secrets or originals are committed.
 - Browser behavior is checked on desktop and mobile.

@@ -18,12 +18,14 @@ import {
   getAlbumCoverPreviewUrlFromArchive,
   getOrderedAlbumsFromArchive,
   getOrderedSetsFromArchive,
+  getPhotosForAlbumFromArchive,
   useAdminArchive
 } from "@/admin/admin-state";
 import type {
   ArchiveStatus,
   SetLayoutMode
 } from "@/admin/archive-schema";
+import { AdminDemoBadge } from "@/components/admin/AdminDemoBadge";
 import { useAdminConfirmDialog } from "@/components/admin/AdminConfirmDialog";
 import type { LocalArchiveAlbum } from "@/admin/admin-state";
 
@@ -162,7 +164,7 @@ export function SetWorkspace() {
             <div className="admin-column-stat-grid">
               <Snapshot label="Albums" value={`${selectedAlbums.length}`} />
               <Snapshot label="Published" value={`${selectedAlbums.filter((album) => album.status === "published").length}`} />
-              <Snapshot label="Photos" value={`${selectedAlbums.reduce((sum, album) => sum + archive.photos.filter((photo) => photo.albumId === album.id && photo.status !== "trash").length, 0)}`} />
+              <Snapshot label="Photos" value={`${selectedAlbums.reduce((sum, album) => sum + getPhotosForAlbumFromArchive(archive, album.id).length, 0)}`} />
             </div>
 
             <div className="admin-form-stack">
@@ -229,7 +231,10 @@ export function SetWorkspace() {
                 <article className="admin-album-tile admin-album-tile--square" key={album.id}>
                   <CoverImage url={getAlbumCoverPreviewUrlFromArchive(archive, previewUrls, album)} />
                   <div>
-                    <strong>{album.title}</strong>
+                    <span className="admin-tile-title-row">
+                      <strong>{album.title}</strong>
+                      {album.isDemo ? <AdminDemoBadge /> : null}
+                    </span>
                     <small>{album.subtitle || "No subtitle"}</small>
                     <div className="admin-order-buttons admin-order-buttons--inline">
                       <button disabled={index === 0} onClick={() => actions.reorderAlbumInSet(selectedSet.id, album.id, "left")} type="button" aria-label="Move album left"><ArrowLeft aria-hidden /></button>

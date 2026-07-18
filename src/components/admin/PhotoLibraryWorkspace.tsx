@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Images, Link2, Search, Tags } from "lucide-react";
 
 import {
+  getAlbumPhotosForPhotoFromArchive,
   getEffectivePhotoTagIdsFromArchive,
   getOrderedAlbumsFromArchive,
   getPhotoDisplayUrlFromArchive,
@@ -11,6 +12,7 @@ import {
   useAdminArchive
 } from "@/admin/admin-state";
 import { formatBytes } from "@/admin/repository";
+import { AdminDemoBadge } from "@/components/admin/AdminDemoBadge";
 import type { ArchiveStatus } from "@/admin/archive-schema";
 import type { LocalArchivePhoto } from "@/admin/admin-state";
 
@@ -19,9 +21,21 @@ const statusFilters: Array<ArchiveStatus | "all"> = ["all", "draft", "review", "
 export function PhotoLibraryWorkspace() {
   const { actions, archive, previewUrls } = useAdminArchive();
   const albums = getOrderedAlbumsFromArchive(archive);
+  const albumOrderById = new Map(albums.map((album, index) => [album.id, index]));
+  const photoOrderById = new Map<string, number>();
+  for (const membership of archive.albumPhotos) {
+    const albumOrder = albumOrderById.get(membership.albumId) ?? Number.MAX_SAFE_INTEGER;
+    const currentOrder = photoOrderById.get(membership.photoId) ?? Number.MAX_SAFE_INTEGER;
+    photoOrderById.set(membership.photoId, Math.min(currentOrder, albumOrder));
+  }
   const activePhotos = archive.photos
     .filter((photo) => photo.status !== "trash" && photo.status !== "deleted")
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.position - b.position);
+    .sort((a, b) =>
+      (photoOrderById.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+        (photoOrderById.get(b.id) ?? Number.MAX_SAFE_INTEGER) ||
+      a.createdAt.localeCompare(b.createdAt) ||
+      a.slug.localeCompare(b.slug)
+    );
   const [albumFilter, setAlbumFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<ArchiveStatus | "all">("all");
   const [query, setQuery] = useState("");
@@ -31,14 +45,20 @@ export function PhotoLibraryWorkspace() {
   const tagById = useMemo(() => new Map(archive.tags.map((tag) => [tag.id, tag])), [archive.tags]);
   const normalizedQuery = query.trim().toLowerCase();
   const visiblePhotos = activePhotos.filter((photo) => {
-    const album = albumById.get(photo.albumId);
+    const appearances = getAlbumPhotosForPhotoFromArchive(archive, photo.id);
+    const photoAlbums = appearances
+      .map((appearance) => albumById.get(appearance.albumId))
+      .filter((album): album is NonNullable<typeof album> => Boolean(album));
     const tagLabels = getEffectivePhotoTagIdsFromArchive(archive, photo)
       .map((tagId) => tagById.get(tagId)?.label.toLowerCase() ?? "")
       .join(" ");
-    const haystack = `${photo.title} ${photo.slug} ${album?.title ?? ""} ${album?.subtitle ?? ""} ${tagLabels}`.toLowerCase();
+    const albumLabels = photoAlbums
+      .map((album) => `${album.title} ${album.subtitle}`)
+      .join(" ");
+    const haystack = `${photo.title} ${photo.slug} ${albumLabels} ${tagLabels}`.toLowerCase();
 
     return (
-      (albumFilter === "all" || photo.albumId === albumFilter) &&
+      (albumFilter === "all" || appearances.some((appearance) => appearance.albumId === albumFilter)) &&
       (statusFilter === "all" || photo.status === statusFilter) &&
       (!normalizedQuery || haystack.includes(normalizedQuery))
     );
@@ -47,18 +67,15 @@ export function PhotoLibraryWorkspace() {
     ?? activePhotos.find((photo) => photo.id === selectedPhotoIdState)
     ?? visiblePhotos[0]
     ?? activePhotos[0];
-  const selectedAlbum = albumById.get(selectedPhoto?.albumId ?? "");
-  const selectedCanonicalId = selectedPhoto ? getCanonicalPhotoId(selectedPhoto) : "";
+  const appearances = selectedPhoto
+    ? getAlbumPhotosForPhotoFromArchive(archive, selectedPhoto.id)
+    : [];
+  const selectedAlbum = albumById.get(appearances[0]?.albumId ?? "");
   const targetAlbumAlreadyContains = Boolean(
     selectedPhoto &&
     targetAlbumId &&
-    activePhotos.some((photo) =>
-      photo.albumId === targetAlbumId && getCanonicalPhotoId(photo) === selectedCanonicalId
-    )
+    appearances.some((appearance) => appearance.albumId === targetAlbumId)
   );
-  const appearances = selectedPhoto
-    ? activePhotos.filter((photo) => getCanonicalPhotoId(photo) === selectedCanonicalId)
-    : [];
 
   function addSelectedToAlbum() {
     if (!selectedPhoto || !targetAlbumId || targetAlbumAlreadyContains) return;
@@ -80,7 +97,7 @@ export function PhotoLibraryWorkspace() {
         <div className="admin-library-note">
           <Images aria-hidden />
           <p>
-            Files stay single. A photo can appear in several albums as a linked record that reuses the same assets.
+            Files stay single. Album memberships reuse the same photo and assets.
           </p>
         </div>
 
@@ -111,7 +128,10 @@ export function PhotoLibraryWorkspace() {
 
         <div className="admin-column-stat-grid admin-column-stat-grid--two">
           <Snapshot label="Visible" value={`${visiblePhotos.length}`} />
-          <Snapshot label="Linked" value={`${activePhotos.filter((photo) => photo.sourcePhotoId).length}`} />
+          <Snapshot
+            label="Multi-album"
+            value={`${activePhotos.filter((photo) => getAlbumPhotosForPhotoFromArchive(archive, photo.id).length > 1).length}`}
+          />
         </div>
       </section>
 
@@ -126,13 +146,16 @@ export function PhotoLibraryWorkspace() {
 
         <div className="admin-library-grid">
           {visiblePhotos.map((photo) => {
-            const album = albumById.get(photo.albumId);
+            const appearances = getAlbumPhotosForPhotoFromArchive(archive, photo.id);
+            const primaryAppearance = appearances[0];
+            const album = albumById.get(primaryAppearance?.albumId ?? "");
+            const isDemo = appearances.some((appearance) => albumById.get(appearance.albumId)?.isDemo);
 
             return (
               <button
                 className="admin-library-photo"
                 data-hidden={photo.status === "hidden" ? "true" : undefined}
-                data-linked={photo.sourcePhotoId ? "true" : undefined}
+                data-linked={appearances.length > 1 ? "true" : undefined}
                 data-selected={photo.id === selectedPhoto?.id ? "true" : undefined}
                 key={photo.id}
                 onClick={() => setSelectedPhotoId(photo.id)}
@@ -141,7 +164,11 @@ export function PhotoLibraryWorkspace() {
                 type="button"
               >
                 <LibraryImage archive={archive} photo={photo} previewUrls={previewUrls} />
-                <span>{album?.title ?? "No album"} · {photo.position}</span>
+                <span className="admin-library-photo__meta">
+                  <span>{album?.title ?? "No album"}{primaryAppearance ? ` · ${primaryAppearance.position}` : ""}</span>
+                  {appearances.length > 1 ? <span className="admin-linked-badge">{appearances.length} albums</span> : null}
+                  {isDemo ? <AdminDemoBadge /> : null}
+                </span>
               </button>
             );
           })}
@@ -156,7 +183,10 @@ export function PhotoLibraryWorkspace() {
               <div>
                 <p className="admin-kicker">Selected photo</p>
                 <h2>{selectedPhoto.title}</h2>
-                <p>{selectedAlbum?.title ?? "Unknown album"} · {appearances.length} album appearance{appearances.length === 1 ? "" : "s"}</p>
+                <p>
+                  {selectedAlbum?.title ?? "Unknown album"} · {appearances.length} album appearance{appearances.length === 1 ? "" : "s"}
+                  {selectedAlbum?.isDemo ? " · demo" : ""}
+                </p>
               </div>
               <Tags aria-hidden className="admin-section-icon" />
             </div>
@@ -183,18 +213,18 @@ export function PhotoLibraryWorkspace() {
                 type="button"
               >
                 <Link2 aria-hidden />
-                {targetAlbumAlreadyContains ? "Already in album" : "Add linked copy"}
+                {targetAlbumAlreadyContains ? "Already in album" : "Add to album"}
               </button>
             </div>
 
             <div className="admin-subsection">
               <h4>Appearances</h4>
               <div className="admin-linked-list">
-                {appearances.map((photo) => (
-                  <button key={photo.id} onClick={() => setSelectedPhotoId(photo.id)} type="button">
-                    <span>{albumById.get(photo.albumId)?.title ?? "Unknown album"}</span>
-                    <small>{photo.sourcePhotoId ? "linked" : "source"} · #{photo.position}</small>
-                  </button>
+                {appearances.map((appearance) => (
+                  <div key={`${appearance.albumId}:${appearance.photoId}`}>
+                    <span>{albumById.get(appearance.albumId)?.title ?? "Unknown album"}</span>
+                    <small>membership · #{appearance.position}</small>
+                  </div>
                 ))}
               </div>
             </div>
@@ -232,10 +262,6 @@ function Snapshot({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </div>
   );
-}
-
-function getCanonicalPhotoId(photo: Pick<LocalArchivePhoto, "id" | "sourcePhotoId">) {
-  return photo.sourcePhotoId ?? photo.id;
 }
 
 function getPhotoPreviewAspect(photo: LocalArchivePhoto) {

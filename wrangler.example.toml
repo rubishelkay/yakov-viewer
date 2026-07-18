@@ -1,6 +1,14 @@
 name = "yakov-viewer"
-compatibility_date = "2026-05-12"
-pages_build_output_dir = "out"
+main = ".open-next/worker.js"
+compatibility_date = "2026-07-17"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+
+[observability]
+enabled = true
 
 [[d1_databases]]
 binding = "DB"
@@ -20,7 +28,8 @@ binding = "IMAGE_PROCESSING"
 queue = "yakov-image-processing"
 
 [vars]
+ADMIN_ACCESS_ENABLED = "false"
+ADMIN_EMAIL = "Jacobjshmol@gmail.com"
 NEXT_PUBLIC_SITE_URL = "https://yakov.shmol.cc"
 NEXT_PUBLIC_ASSET_BASE_URL = "https://assets.yakov.shmol.cc"
 NEXT_PUBLIC_IMAGE_TRANSFORM_BASE_URL = "https://yakov.shmol.cc"
-

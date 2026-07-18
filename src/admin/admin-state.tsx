@@ -16,6 +16,7 @@ import type {
   AdminArchive,
   AdminSettings,
   ArchiveAlbum,
+  ArchiveAlbumPhoto,
   ArchiveAsset,
   ArchivePhoto,
   ArchiveSet,
@@ -34,10 +35,12 @@ import {
   savePreviewBlob
 } from "./local-preview-store";
 
-const STORAGE_KEY = "yakov-admin-archive-v2";
-const STORAGE_VERSION = 2;
+const STORAGE_KEY = "yakov-admin-archive-v4";
+const LEGACY_STORAGE_KEY = "yakov-admin-archive-v3";
+const STORAGE_VERSION = 4;
 const TEMP_ADMIN_PREVIEW_PREFIX = "/_admin-previews/";
 const TEMP_R2_SEED_HOST = "pub-500a8cf5bb2a4e3db51ea0c9789e6e88.r2.dev";
+const LOCAL_ASSET_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 
 export type LocalArchiveAsset = ArchiveAsset & {
   localPreviewId?: string;
@@ -50,6 +53,15 @@ export type LocalArchivePhoto = ArchivePhoto & {
   localPreviewId?: string;
   sourceBytes?: number;
   sourceFileName?: string;
+};
+
+export type LocalArchiveAlbumPhoto = ArchiveAlbumPhoto & {
+  isDirty?: boolean;
+};
+
+export type LocalArchivePhotoInAlbum = LocalArchivePhoto & {
+  albumId: string;
+  position: number;
 };
 
 export type LocalArchiveAlbum = ArchiveAlbum & {
@@ -65,9 +77,10 @@ export type LocalArchiveTag = ArchiveTag & {
   isDirty?: boolean;
 };
 
-export type LocalAdminArchive = Omit<AdminArchive, "sets" | "albums" | "photos" | "assets" | "tags"> & {
+export type LocalAdminArchive = Omit<AdminArchive, "sets" | "albums" | "albumPhotos" | "photos" | "assets" | "tags"> & {
   sets: LocalArchiveSet[];
   albums: LocalArchiveAlbum[];
+  albumPhotos: LocalArchiveAlbumPhoto[];
   photos: LocalArchivePhoto[];
   assets: LocalArchiveAsset[];
   tags: LocalArchiveTag[];
@@ -95,7 +108,7 @@ type CreateTagInput = {
 };
 
 type AddPhotoPayload = {
-  albumId: string;
+  albumPhoto: LocalArchiveAlbumPhoto;
   assets: LocalArchiveAsset[];
   job: UploadJob;
   photo: LocalArchivePhoto;
@@ -107,7 +120,7 @@ type AdminAction =
   | { type: "updateAlbum"; albumId: string; update: Partial<LocalArchiveAlbum> }
   | { type: "reorderAlbum"; albumId: string; direction: "up" | "down" }
   | { type: "trashAlbum"; albumId: string; trashItem: TrashItem; now: string }
-  | { type: "addExistingPhotoToAlbum"; photo: LocalArchivePhoto; albumId: string; now: string }
+  | { type: "addExistingPhotoToAlbum"; albumPhoto: LocalArchiveAlbumPhoto; photoId: string; albumId: string; now: string }
   | { type: "addPhotosToAlbum"; payloads: AddPhotoPayload[]; now: string }
   | { type: "updatePhoto"; photoId: string; update: Partial<LocalArchivePhoto> }
   | { type: "reorderPhoto"; albumId: string; photoId: string; direction: "up" | "down" }
@@ -195,6 +208,7 @@ export function AdminArchiveProvider({ children }: Readonly<{ children: React.Re
         archive
       })
     );
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
   }, [archive, hydrated]);
 
   useEffect(() => {
@@ -260,49 +274,34 @@ export function AdminArchiveProvider({ children }: Readonly<{ children: React.Re
         const targetAlbum = archive.albums.find((album) => album.id === albumId);
         if (!sourcePhoto || !targetAlbum) return undefined;
 
-        const canonicalPhotoId = getCanonicalPhotoId(sourcePhoto);
-        const existingReference = archive.photos.find((photo) =>
-          photo.albumId === albumId &&
-          photo.status !== "deleted" &&
-          photo.status !== "trash" &&
-          getCanonicalPhotoId(photo) === canonicalPhotoId
+        const existingReference = archive.albumPhotos.find((albumPhoto) =>
+          albumPhoto.albumId === albumId && albumPhoto.photoId === sourcePhoto.id
         );
-        if (existingReference) return existingReference.id;
+        if (existingReference) return sourcePhoto.id;
 
-        const existingPositions = archive.photos
-          .filter((photo) => photo.albumId === albumId)
-          .map((photo) => photo.position);
+        const existingPositions = archive.albumPhotos
+          .filter((albumPhoto) => albumPhoto.albumId === albumId)
+          .map((albumPhoto) => albumPhoto.position);
         const position = existingPositions.length ? Math.max(...existingPositions) + 1 : 1;
         const timestamp = now();
-        const slug = uniqueSlug(`${sourcePhoto.slug}-${targetAlbum.slug}`, archive.photos.map((photo) => photo.slug));
-        const linkedPhoto: LocalArchivePhoto = {
-          ...sourcePhoto,
-          id: uniqueId(`photo-link-${slug}`),
+        const albumPhoto: LocalArchiveAlbumPhoto = {
           albumId,
-          originAlbumId: sourcePhoto.originAlbumId ?? sourcePhoto.albumId,
-          slug,
-          sourcePhotoId: canonicalPhotoId,
-          status: archive.settings.defaultPhotoStatus,
+          photoId: sourcePhoto.id,
           position,
-          frameNumber: position,
           createdAt: timestamp,
-          updatedAt: timestamp,
-          publishedAt: undefined,
-          hiddenAt: undefined,
-          deletedAt: undefined,
           isDirty: true
         };
 
-        dispatch({ type: "addExistingPhotoToAlbum", albumId, photo: linkedPhoto, now: timestamp });
-        return linkedPhoto.id;
+        dispatch({ type: "addExistingPhotoToAlbum", albumId, albumPhoto, photoId: sourcePhoto.id, now: timestamp });
+        return sourcePhoto.id;
       },
       async addPhotosToAlbum(albumId, files) {
         const album = archive.albums.find((item) => item.id === albumId);
         if (!album || !files.length) return;
 
-        const existingPositions = archive.photos
-          .filter((photo) => photo.albumId === albumId)
-          .map((photo) => photo.position);
+        const existingPositions = archive.albumPhotos
+          .filter((albumPhoto) => albumPhoto.albumId === albumId)
+          .map((albumPhoto) => albumPhoto.position);
         const firstPosition = existingPositions.length ? Math.max(...existingPositions) + 1 : 1;
         const timestamp = now();
         const payloads: AddPhotoPayload[] = [];
@@ -330,12 +329,10 @@ export function AdminArchiveProvider({ children }: Readonly<{ children: React.Re
 
           const photo: LocalArchivePhoto = {
             id: photoId,
-            albumId,
             slug: photoId.replace(/^photo-/, ""),
             title: file.name.replace(/\.[^.]+$/, ""),
             description: "",
             status: archive.settings.defaultPhotoStatus,
-            position,
             frameNumber: position,
             tagIds: [],
             assetIds: [
@@ -357,7 +354,13 @@ export function AdminArchiveProvider({ children }: Readonly<{ children: React.Re
           };
 
           payloads.push({
-            albumId,
+            albumPhoto: {
+              albumId,
+              photoId,
+              position,
+              createdAt: timestamp,
+              isDirty: true
+            },
             photo,
             assets: makeLocalAssets(photo, file, {
               sourcePreviewId,
@@ -385,6 +388,7 @@ export function AdminArchiveProvider({ children }: Readonly<{ children: React.Re
           subtitle: input.subtitle?.trim() ?? "",
           description: "",
           status: input.status ?? archive.settings.defaultAlbumStatus,
+          isDemo: false,
           setIds: input.setIds ?? [],
           tagIds: input.tagIds ?? [],
           publicDownloadPolicy: input.publicDownloadPolicy ?? archive.settings.publicDownloadMode,
@@ -482,6 +486,7 @@ export function AdminArchiveProvider({ children }: Readonly<{ children: React.Re
       },
       async resetLocalArchive() {
         localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(LEGACY_STORAGE_KEY);
         await clearPreviewBlobs();
         for (const url of Object.values(previewUrlsRef.current)) {
           URL.revokeObjectURL(url);
@@ -648,9 +653,28 @@ export function getOrderedAlbumsFromArchive(archive: LocalAdminArchive) {
 export function getPhotosForAlbumFromArchive(archive: LocalAdminArchive, albumId: string | undefined) {
   if (!albumId) return [];
 
-  return archive.photos
-    .filter((photo) => photo.albumId === albumId && photo.status !== "trash" && photo.status !== "deleted")
-    .sort((a, b) => a.position - b.position);
+  const photoById = new Map(archive.photos.map((photo) => [photo.id, photo]));
+
+  return archive.albumPhotos
+    .filter((albumPhoto) => albumPhoto.albumId === albumId)
+    .sort((a, b) => a.position - b.position)
+    .map((albumPhoto) => {
+      const photo = photoById.get(albumPhoto.photoId);
+
+      return photo
+        ? { ...photo, albumId: albumPhoto.albumId, position: albumPhoto.position }
+        : undefined;
+    })
+    .filter(
+      (photo): photo is LocalArchivePhotoInAlbum =>
+        Boolean(photo && photo.status !== "trash" && photo.status !== "deleted")
+    );
+}
+
+export function getAlbumPhotosForPhotoFromArchive(archive: LocalAdminArchive, photoId: string) {
+  return archive.albumPhotos
+    .filter((albumPhoto) => albumPhoto.photoId === photoId)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.position - b.position);
 }
 
 export function getEffectivePhotoTagIdsFromArchive(
@@ -658,9 +682,16 @@ export function getEffectivePhotoTagIdsFromArchive(
   photo: LocalArchivePhoto | undefined
 ) {
   if (!photo) return [];
-  const album = archive.albums.find((item) => item.id === photo.albumId);
+  const publishedAlbumIds = new Set(
+    archive.albums
+      .filter((album) => album.status === "published")
+      .map((album) => album.id)
+  );
+  const inheritedTagIds = archive.albumPhotos
+    .filter((albumPhoto) => albumPhoto.photoId === photo.id && publishedAlbumIds.has(albumPhoto.albumId))
+    .flatMap((albumPhoto) => archive.albums.find((album) => album.id === albumPhoto.albumId)?.tagIds ?? []);
 
-  return Array.from(new Set([...(album?.tagIds ?? []), ...photo.tagIds]));
+  return Array.from(new Set([...inheritedTagIds, ...photo.tagIds]));
 }
 
 export function getTagUsageFromArchive(archive: LocalAdminArchive, tagId: string) {
@@ -672,9 +703,12 @@ export function getTagUsageFromArchive(archive: LocalAdminArchive, tagId: string
   ).length;
   const inheritedPhotoCount = archive.photos.filter((photo) => {
     if (photo.status === "deleted") return false;
-    const album = archive.albums.find((item) => item.id === photo.albumId);
+    return archive.albumPhotos.some((albumPhoto) => {
+      if (albumPhoto.photoId !== photo.id) return false;
+      const album = archive.albums.find((item) => item.id === albumPhoto.albumId);
 
-    return Boolean(album?.tagIds.includes(tagId));
+      return Boolean(album && album.status !== "deleted" && album.tagIds.includes(tagId));
+    });
   }).length;
 
   return {
@@ -744,14 +778,15 @@ function adminArchiveReducer(state: LocalAdminArchive, action: AdminAction): Loc
       };
     case "reorderAlbum":
       return { ...state, albums: reorderAlbums(state.albums, action.albumId, action.direction) };
-    case "trashAlbum":
+    case "trashAlbum": {
+      const orphanPhotoIds = new Set(getOrphanPhotoIdsForAlbum(state, action.albumId));
       return {
         ...state,
         albums: state.albums.map((album) =>
           album.id === action.albumId ? { ...album, status: "trash", deletedAt: action.now, updatedAt: action.now, isDirty: true } : album
         ),
         photos: state.photos.map((photo) =>
-          photo.albumId === action.albumId ? { ...photo, status: "trash", deletedAt: action.now, updatedAt: action.now, isDirty: true } : photo
+          orphanPhotoIds.has(photo.id) ? { ...photo, status: "trash", deletedAt: action.now, updatedAt: action.now, isDirty: true } : photo
         ),
         sets: state.sets.map((set) => ({
           ...set,
@@ -759,29 +794,31 @@ function adminArchiveReducer(state: LocalAdminArchive, action: AdminAction): Loc
         })),
         trash: [action.trashItem, ...state.trash]
       };
+    }
     case "addExistingPhotoToAlbum":
       return {
         ...state,
         albums: state.albums.map((album) => {
           if (album.id !== action.albumId) return album;
-          const displayAssetId = action.photo.assetIds.find((id) => id.endsWith("-display"));
+          const photo = state.photos.find((item) => item.id === action.photoId);
+          const displayAssetId = photo?.assetIds.find((id) => id.endsWith("-display"));
 
           return {
             ...album,
             coverLandscapeAssetId: album.coverLandscapeAssetId ?? displayAssetId,
             coverPortraitAssetId: album.coverPortraitAssetId ?? displayAssetId,
-            coverSquareAssetId: album.coverSquareAssetId ?? action.photo.assetIds.find((id) => id.endsWith("-thumb")),
+            coverSquareAssetId: album.coverSquareAssetId ?? photo?.assetIds.find((id) => id.endsWith("-thumb")),
             updatedAt: action.now,
             isDirty: true
           };
         }),
-        photos: [...state.photos, action.photo]
+        albumPhotos: [...state.albumPhotos, action.albumPhoto]
       };
     case "addPhotosToAlbum":
       return {
         ...state,
         albums: state.albums.map((album) => {
-          if (album.id !== action.payloads[0]?.albumId) return album;
+          if (album.id !== action.payloads[0]?.albumPhoto.albumId) return album;
           const firstPayload = action.payloads[0];
           const coverAssetId = firstPayload.photo.assetIds.find((id) => id.endsWith("-display"));
 
@@ -795,6 +832,7 @@ function adminArchiveReducer(state: LocalAdminArchive, action: AdminAction): Loc
           };
         }),
         assets: [...action.payloads.flatMap((payload) => payload.assets), ...state.assets],
+        albumPhotos: [...state.albumPhotos, ...action.payloads.map((payload) => payload.albumPhoto)],
         photos: [...state.photos, ...action.payloads.map((payload) => payload.photo)],
         uploadJobs: [...action.payloads.map((payload) => payload.job), ...state.uploadJobs]
       };
@@ -806,9 +844,9 @@ function adminArchiveReducer(state: LocalAdminArchive, action: AdminAction): Loc
         )
       };
     case "reorderPhoto":
-      return { ...state, photos: reorderPhotos(state.photos, action.albumId, action.photoId, action.direction) };
+      return { ...state, albumPhotos: reorderPhotos(state.albumPhotos, action.albumId, action.photoId, action.direction) };
     case "movePhotoToPosition":
-      return { ...state, photos: movePhotoToPosition(state.photos, action.albumId, action.photoId, action.position) };
+      return { ...state, albumPhotos: movePhotoToPosition(state.albumPhotos, action.albumId, action.photoId, action.position) };
     case "trashPhoto":
       return {
         ...state,
@@ -952,15 +990,146 @@ function seedArchive(): LocalAdminArchive {
 
 function readStoredArchive(): LocalAdminArchive | undefined {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return undefined;
-    const parsed = JSON.parse(raw) as { version?: number; archive?: LocalAdminArchive };
+    const currentRaw = localStorage.getItem(STORAGE_KEY);
+    if (currentRaw) {
+      const current = JSON.parse(currentRaw) as { version?: number; archive?: LocalAdminArchive };
 
-    if (parsed.version !== STORAGE_VERSION || !parsed.archive) return undefined;
-    return parsed.archive;
+      if (current.version === STORAGE_VERSION && current.archive) {
+        return normalizeStoredArchive(current.archive);
+      }
+    }
+
+    const legacyRaw = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (!legacyRaw) return undefined;
+    const legacy = JSON.parse(legacyRaw) as { version?: number; archive?: LegacyLocalAdminArchive };
+
+    return legacy.version === 3 && legacy.archive
+      ? migrateLegacyStoredArchive(legacy.archive)
+      : undefined;
   } catch {
     return undefined;
   }
+}
+
+function normalizeStoredArchive(archive: LocalAdminArchive): LocalAdminArchive {
+  const seedDemoAlbumIds = new Set(
+    adminArchive.albums.filter((album) => album.isDemo).map((album) => album.id)
+  );
+  const hostedAssetBaseUrl = "https://assets.yakov.shmol.cc";
+  const shouldNormalizeHostedAssets = !LOCAL_ASSET_HOSTS.has(window.location.hostname);
+
+  return {
+    ...archive,
+    albumPhotos: normalizeAllAlbumPhotoPositions(archive.albumPhotos ?? []),
+    albums: archive.albums.map((album) => ({
+      ...album,
+      isDemo: album.isDemo ?? seedDemoAlbumIds.has(album.id)
+    })),
+    assets: archive.assets.map((asset) => {
+      if (!shouldNormalizeHostedAssets || !asset.publicUrl) return asset;
+
+      try {
+        const url = new URL(asset.publicUrl);
+        if (!LOCAL_ASSET_HOSTS.has(url.hostname) || url.port !== "4173") {
+          return asset;
+        }
+
+        return {
+          ...asset,
+          publicUrl: `${hostedAssetBaseUrl}/${asset.key.replace(/^\/+/, "")}`
+        };
+      } catch {
+        return asset;
+      }
+    })
+  };
+}
+
+type LegacyLocalArchivePhoto = LocalArchivePhoto & {
+  albumId: string;
+  originAlbumId?: string;
+  position: number;
+  sourcePhotoId?: string;
+};
+
+type LegacyLocalAdminArchive = Omit<LocalAdminArchive, "albumPhotos" | "photos"> & {
+  albumPhotos?: LocalArchiveAlbumPhoto[];
+  photos: LegacyLocalArchivePhoto[];
+};
+
+function migrateLegacyStoredArchive(legacy: LegacyLocalAdminArchive): LocalAdminArchive {
+  const canonicalIdByLegacyId = new Map(
+    legacy.photos.map((photo) => [photo.id, photo.sourcePhotoId ?? photo.id])
+  );
+  const canonicalPhotoById = new Map<string, LocalArchivePhoto>();
+  const membershipByKey = new Map<string, LocalArchiveAlbumPhoto>();
+
+  for (const legacyPhoto of legacy.photos) {
+    const canonicalId = canonicalIdByLegacyId.get(legacyPhoto.id) ?? legacyPhoto.id;
+    const {
+      albumId,
+      originAlbumId: _originAlbumId,
+      position,
+      sourcePhotoId: _sourcePhotoId,
+      ...photo
+    } = legacyPhoto;
+    void _originAlbumId;
+    void _sourcePhotoId;
+    const existingPhoto = canonicalPhotoById.get(canonicalId);
+
+    if (!existingPhoto || legacyPhoto.id === canonicalId) {
+      canonicalPhotoById.set(canonicalId, { ...photo, id: canonicalId });
+    }
+
+    const membershipKey = `${albumId}:${canonicalId}`;
+    const existingMembership = membershipByKey.get(membershipKey);
+    if (!existingMembership || position < existingMembership.position) {
+      membershipByKey.set(membershipKey, {
+        albumId,
+        photoId: canonicalId,
+        position,
+        createdAt: legacyPhoto.createdAt,
+        isDirty: true
+      });
+    }
+  }
+
+  const mapPhotoId = (photoId: string) => canonicalIdByLegacyId.get(photoId) ?? photoId;
+
+  return normalizeStoredArchive({
+    ...legacy,
+    albumPhotos: Array.from(membershipByKey.values()),
+    assets: legacy.assets.map((asset) => ({
+      ...asset,
+      photoId: asset.photoId ? mapPhotoId(asset.photoId) : undefined
+    })),
+    collections: legacy.collections.map((collection) => ({
+      ...collection,
+      photoIdsWithOrder: Array.from(
+        new Map(
+          collection.photoIdsWithOrder.map((reference) => [
+            mapPhotoId(reference.photoId),
+            { ...reference, photoId: mapPhotoId(reference.photoId) }
+          ])
+        ).values()
+      )
+    })),
+    photos: Array.from(canonicalPhotoById.values()),
+    trash: legacy.trash.map((item) => ({
+      ...item,
+      entityId: item.entityType === "photo" ? mapPhotoId(item.entityId) : item.entityId,
+      restorePhotoStatuses: item.restorePhotoStatuses
+        ? Array.from(
+            new Map(
+              item.restorePhotoStatuses.map((status) => [
+                mapPhotoId(status.photoId),
+                { ...status, photoId: mapPhotoId(status.photoId) }
+              ])
+            ).values()
+          )
+        : undefined
+    }))
+  });
 }
 
 function now() {
@@ -990,10 +1159,6 @@ function uniqueSlug(value: string, existingSlugs: string[]) {
 
 function uniqueId(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function getCanonicalPhotoId(photo: Pick<LocalArchivePhoto, "id" | "sourcePhotoId">) {
-  return photo.sourcePhotoId ?? photo.id;
 }
 
 function assetId(photoId: string, version: ArchiveAsset["version"]) {
@@ -1034,7 +1199,7 @@ function makeLocalAsset(
     version,
     access,
     bucket: access === "public" ? "yakov-public-assets" : "yakov-private-assets",
-    key: `local/${version}/${photo.albumId}/${photo.slug}.jpg`,
+    key: `local/${version}/${photo.id}/${photo.slug}.jpg`,
     width,
     height,
     bytes,
@@ -1159,44 +1324,48 @@ function reorderAlbums(albums: LocalArchiveAlbum[], albumId: string, direction: 
 }
 
 function reorderPhotos(
-  photos: LocalArchivePhoto[],
+  albumPhotos: LocalArchiveAlbumPhoto[],
   albumId: string,
   photoId: string,
   direction: "up" | "down"
 ) {
-  const albumPhotos = photos
-    .filter((photo) => photo.albumId === albumId)
+  const orderedAlbumPhotos = albumPhotos
+    .filter((albumPhoto) => albumPhoto.albumId === albumId)
     .sort((a, b) => a.position - b.position);
-  const currentIndex = albumPhotos.findIndex((photo) => photo.id === photoId);
+  const currentIndex = orderedAlbumPhotos.findIndex((albumPhoto) => albumPhoto.photoId === photoId);
   const targetIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
 
-  if (currentIndex < 0 || targetIndex < 0 || targetIndex >= albumPhotos.length) return photos;
+  if (currentIndex < 0 || targetIndex < 0 || targetIndex >= orderedAlbumPhotos.length) return albumPhotos;
 
-  const reordered = [...albumPhotos];
+  const reordered = [...orderedAlbumPhotos];
   [reordered[currentIndex], reordered[targetIndex]] = [reordered[targetIndex], reordered[currentIndex]];
-  const positionById = new Map(reordered.map((photo, index) => [photo.id, index + 1]));
+  const positionById = new Map(reordered.map((albumPhoto, index) => [albumPhoto.photoId, index + 1]));
 
-  return photos.map((photo) =>
-    positionById.has(photo.id) ? { ...photo, position: positionById.get(photo.id) ?? photo.position, isDirty: true, updatedAt: now() } : photo
+  return albumPhotos.map((albumPhoto) =>
+    albumPhoto.albumId === albumId && positionById.has(albumPhoto.photoId)
+      ? { ...albumPhoto, position: positionById.get(albumPhoto.photoId) ?? albumPhoto.position, isDirty: true }
+      : albumPhoto
   );
 }
 
-function movePhotoToPosition(photos: LocalArchivePhoto[], albumId: string, photoId: string, position: number) {
-  const albumPhotos = photos
-    .filter((photo) => photo.albumId === albumId)
+function movePhotoToPosition(albumPhotos: LocalArchiveAlbumPhoto[], albumId: string, photoId: string, position: number) {
+  const orderedAlbumPhotos = albumPhotos
+    .filter((albumPhoto) => albumPhoto.albumId === albumId)
     .sort((a, b) => a.position - b.position);
-  const currentIndex = albumPhotos.findIndex((photo) => photo.id === photoId);
+  const currentIndex = orderedAlbumPhotos.findIndex((albumPhoto) => albumPhoto.photoId === photoId);
 
-  if (currentIndex < 0) return photos;
+  if (currentIndex < 0) return albumPhotos;
 
-  const boundedPosition = Math.max(1, Math.min(position, albumPhotos.length));
-  const reordered = [...albumPhotos];
+  const boundedPosition = Math.max(1, Math.min(position, orderedAlbumPhotos.length));
+  const reordered = [...orderedAlbumPhotos];
   const [moved] = reordered.splice(currentIndex, 1);
   reordered.splice(boundedPosition - 1, 0, moved);
-  const positionById = new Map(reordered.map((photo, index) => [photo.id, index + 1]));
+  const positionById = new Map(reordered.map((albumPhoto, index) => [albumPhoto.photoId, index + 1]));
 
-  return photos.map((photo) =>
-    positionById.has(photo.id) ? { ...photo, position: positionById.get(photo.id) ?? photo.position, isDirty: true, updatedAt: now() } : photo
+  return albumPhotos.map((albumPhoto) =>
+    albumPhoto.albumId === albumId && positionById.has(albumPhoto.photoId)
+      ? { ...albumPhoto, position: positionById.get(albumPhoto.photoId) ?? albumPhoto.position, isDirty: true }
+      : albumPhoto
   );
 }
 
@@ -1251,14 +1420,14 @@ function makeTrashItem(
           : undefined;
   const photoIds =
     entityType === "album"
-      ? archive.photos.filter((photo) => photo.albumId === entityId).map((photo) => photo.id)
+      ? getOrphanPhotoIdsForAlbum(archive, entityId)
       : entityType === "photo"
         ? [entityId]
         : [];
   const restorePhotoStatuses =
     entityType === "album"
       ? archive.photos
-          .filter((photo) => photo.albumId === entityId)
+          .filter((photo) => photoIds.includes(photo.id))
           .map((photo) => ({ hiddenAt: photo.hiddenAt, photoId: photo.id, status: photo.status }))
       : entityType === "photo"
         ? archive.photos
@@ -1309,7 +1478,7 @@ function restoreTrashItem(state: LocalAdminArchive, itemId: string, timestamp: s
         album.id === item.entityId ? { ...album, status: restoredAlbumStatus, deletedAt: undefined, updatedAt: timestamp, isDirty: true } : album
       ),
       photos: state.photos.map((photo) =>
-        photo.albumId === item.entityId
+        photoRestoreById.has(photo.id)
           ? {
               ...photo,
               hiddenAt: photoRestoreById.get(photo.id)?.hiddenAt,
@@ -1387,7 +1556,7 @@ function purgeTrashItem(state: LocalAdminArchive, itemId: string) {
   }
 
   if (item.entityType === "album") {
-    const photoIds = state.photos.filter((photo) => photo.albumId === item.entityId).map((photo) => photo.id);
+    const photoIds = getOrphanPhotoIdsForAlbum(state, item.entityId);
     const purgedAssetIds = new Set(
       state.photos
         .filter((photo) => photoIds.includes(photo.id))
@@ -1398,10 +1567,13 @@ function purgeTrashItem(state: LocalAdminArchive, itemId: string) {
     return {
       ...state,
       albums: state.albums.filter((album) => album.id !== item.entityId),
-      assets: state.assets.filter((asset) =>
-        !purgedAssetIds.has(asset.id) || remainingPhotos.some((photo) => photo.assetIds.includes(asset.id))
-      ),
-      photos: state.photos.filter((photo) => photo.albumId !== item.entityId),
+      albumPhotos: state.albumPhotos.filter((albumPhoto) => albumPhoto.albumId !== item.entityId),
+      assets: state.assets.filter((asset) => !purgedAssetIds.has(asset.id)),
+      collections: state.collections.map((collection) => ({
+        ...collection,
+        photoIdsWithOrder: collection.photoIdsWithOrder.filter((reference) => !photoIds.includes(reference.photoId))
+      })),
+      photos: remainingPhotos,
       sets: state.sets.map((set) => ({
         ...set,
         albumIdsWithOrder: normalizeSetAlbumPositions(set.albumIdsWithOrder.filter((ref) => ref.albumId !== item.entityId))
@@ -1414,13 +1586,16 @@ function purgeTrashItem(state: LocalAdminArchive, itemId: string) {
   if (item.entityType === "photo") {
     const purgedPhoto = state.photos.find((photo) => photo.id === item.entityId);
     const purgedAssetIds = new Set(purgedPhoto?.assetIds ?? []);
-    const remainingPhotos = state.photos.filter((photo) => photo.id !== item.entityId);
 
     return {
       ...state,
-      assets: state.assets.filter((asset) =>
-        !purgedAssetIds.has(asset.id) || remainingPhotos.some((photo) => photo.assetIds.includes(asset.id))
-      ),
+      albums: clearAlbumCoverReferences(state.albums, purgedAssetIds),
+      albumPhotos: state.albumPhotos.filter((albumPhoto) => albumPhoto.photoId !== item.entityId),
+      assets: state.assets.filter((asset) => !purgedAssetIds.has(asset.id)),
+      collections: state.collections.map((collection) => ({
+        ...collection,
+        photoIdsWithOrder: collection.photoIdsWithOrder.filter((reference) => reference.photoId !== item.entityId)
+      })),
       photos: state.photos.filter((photo) => photo.id !== item.entityId),
       trash: state.trash.filter((trashItem) => trashItem.id !== itemId)
     };
@@ -1435,7 +1610,7 @@ function previewIdsForTrashItem(archive: LocalAdminArchive, itemId: string) {
 
   const photoIds =
     item.entityType === "album"
-      ? archive.photos.filter((photo) => photo.albumId === item.entityId).map((photo) => photo.id)
+      ? getOrphanPhotoIdsForAlbum(archive, item.entityId)
       : item.entityType === "photo"
         ? [item.entityId]
         : [];
@@ -1444,16 +1619,60 @@ function previewIdsForTrashItem(archive: LocalAdminArchive, itemId: string) {
       .filter((photo) => photoIds.includes(photo.id))
       .flatMap((photo) => photo.assetIds)
   );
-  const remainingPhotos = archive.photos.filter((photo) => !photoIds.includes(photo.id));
 
   return Array.from(
     new Set(
       archive.assets
         .filter((asset) =>
-          removedAssetIds.has(asset.id) && !remainingPhotos.some((photo) => photo.assetIds.includes(asset.id))
+          removedAssetIds.has(asset.id)
         )
         .map((asset) => asset.localPreviewId)
         .filter((previewId): previewId is string => Boolean(previewId))
     )
   );
+}
+
+function getOrphanPhotoIdsForAlbum(archive: LocalAdminArchive, albumId: string) {
+  const photoIds = new Set(
+    archive.albumPhotos
+      .filter((albumPhoto) => albumPhoto.albumId === albumId)
+      .map((albumPhoto) => albumPhoto.photoId)
+  );
+
+  return Array.from(photoIds).filter((photoId) =>
+    !archive.albumPhotos.some(
+      (albumPhoto) => albumPhoto.photoId === photoId && albumPhoto.albumId !== albumId
+    )
+  );
+}
+
+function normalizeAllAlbumPhotoPositions(albumPhotos: LocalArchiveAlbumPhoto[]) {
+  const byAlbum = new Map<string, LocalArchiveAlbumPhoto[]>();
+
+  for (const albumPhoto of albumPhotos) {
+    const group = byAlbum.get(albumPhoto.albumId) ?? [];
+    group.push(albumPhoto);
+    byAlbum.set(albumPhoto.albumId, group);
+  }
+
+  return Array.from(byAlbum.values()).flatMap((group) =>
+    group
+      .sort((a, b) => a.position - b.position)
+      .map((albumPhoto, index) => ({ ...albumPhoto, position: index + 1 }))
+  );
+}
+
+function clearAlbumCoverReferences(albums: LocalArchiveAlbum[], assetIds: Set<string>) {
+  return albums.map((album) => ({
+    ...album,
+    coverLandscapeAssetId: album.coverLandscapeAssetId && assetIds.has(album.coverLandscapeAssetId)
+      ? undefined
+      : album.coverLandscapeAssetId,
+    coverPortraitAssetId: album.coverPortraitAssetId && assetIds.has(album.coverPortraitAssetId)
+      ? undefined
+      : album.coverPortraitAssetId,
+    coverSquareAssetId: album.coverSquareAssetId && assetIds.has(album.coverSquareAssetId)
+      ? undefined
+      : album.coverSquareAssetId
+  }));
 }

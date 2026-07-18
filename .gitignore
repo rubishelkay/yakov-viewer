@@ -4,6 +4,7 @@
 .dev.vars
 .dev.vars*
 .wrangler/
+.open-next/
 .next/
 out/
 node_modules/
@@ -11,12 +12,14 @@ node_modules/
 pnpm-debug.log*
 tsconfig.tsbuildinfo
 .playwright-cli/
+output/playwright/
 /import/
 /tmp/
 /uploads/
 /derivatives/
 /r2-local/
 public/_admin-previews/
+public/photos/
 *.RAF
 *.raf
 *.ARW

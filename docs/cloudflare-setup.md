@@ -1,74 +1,200 @@
 # Cloudflare Setup
 
-## Pages
+## Target Deployment
 
-Target deployment:
-
-- Framework: Next.js static export
-- Build command: `pnpm build`
-- Output directory: `out`
-- Production domain: `yakov.shmol.cc`
-
-The app uses `output: "export"` in `next.config.mjs`, so it should deploy as a static Cloudflare Pages site.
-
-## Environment Variables
-
-Set these in Cloudflare Pages:
+The combined public site, `/admin`, and API should run as one Next.js application on Cloudflare Workers through `@opennextjs/cloudflare`.
 
 ```txt
-NEXT_PUBLIC_SITE_URL=https://yakov.shmol.cc
-NEXT_PUBLIC_ASSET_BASE_URL=https://assets.yakov.shmol.cc
-NEXT_PUBLIC_IMAGE_TRANSFORM_BASE_URL=https://yakov.shmol.cc
+yakov.shmol.cc          -> Next.js/OpenNext Worker
+yakov.shmol.cc/admin    -> same Worker, protected by Cloudflare Access
+assets.yakov.shmol.cc   -> public R2 derivatives
 ```
 
-Do not commit Cloudflare API tokens, R2 access keys, or secrets.
+Cloudflare now recommends Workers for full-stack Next.js applications. Static Pages export is no longer the target architecture because newly published album routes must work without rebuilding the site.
 
-## R2
+Official references:
 
-Production target:
+- https://developers.cloudflare.com/workers/framework-guides/web-apps/nextjs/
+- https://opennext.js.org/cloudflare/bindings
+- https://developers.cloudflare.com/workers/ci-cd/builds/
 
-- public optimized/display assets on `assets.yakov.shmol.cc`;
-- private originals/backups in a separate bucket if needed;
-- avoid relying on `r2.dev` for production traffic.
+## GitHub Deployment
 
-The current seed data still points at the original `r2.dev` URLs until real asset-domain migration is done.
+Source deployment should remain Git-based:
+
+```txt
+GitHub repository
+  -> Cloudflare Workers Builds
+  -> preview deployment for the integration branch
+  -> production deployment from the agreed production branch
+```
+
+No production switch should happen before the preview has passed public-site, admin, upload, and security checks. The existing production site has no content that needs to be preserved, but replacing it is still an externally visible action and requires a short pre-action brief.
+
+## Bindings
+
+Production Worker bindings:
+
+```txt
+DB                         -> D1 yakov_archive
+PUBLIC_ASSETS              -> R2 yakov-public-assets
+PRIVATE_ASSETS             -> R2 yakov-private-assets
+NEXT_INC_CACHE_R2_BUCKET   -> R2 yakov-next-cache
+IMAGE_QUEUE                -> optional later derivative queue
+```
+
+Bindings are capabilities provided by Cloudflare. They do not require R2 access keys or D1 credentials in application source.
+
+## Repository Configuration
+
+The repository now contains the manually reviewed equivalent of the OpenNext migration:
+
+```txt
+open-next.config.ts   -> OpenNext adapter configuration
+wrangler.jsonc        -> Worker, local D1/R2 bindings, public vars
+cloudflare-env.d.ts   -> compact generated binding types
+```
+
+`wrangler.jsonc` contains the real production D1 UUID and the three production R2
+bindings. Treat `pnpm deploy` as a production command. Local D1 still uses Wrangler's
+isolated `.wrangler/state` database when `--local` is passed.
+
+Local commands:
+
+```sh
+pnpm cf-typegen
+pnpm d1:migrate:local
+pnpm exec opennextjs-cloudflare build
+pnpm exec opennextjs-cloudflare preview
+```
+
+The external admin remains disabled with `ADMIN_ACCESS_ENABLED=false` until Cloudflare
+Access is configured and tested.
+
+## R2 Layout
 
 Recommended bucket split:
 
 ```txt
 yakov-public-assets
 yakov-private-assets
+yakov-next-cache
 ```
 
-`yakov-public-assets` should contain public thumbnails, display images, cover crops, and large JPEG files that are allowed for public download/open access.
+Public bucket content:
 
-`yakov-private-assets` should contain staging uploads, optional private master files, selected RAW/RAF/TIFF files, and temporary trash objects.
+```txt
+photos/<album path>/<file>.jpg          display tier
+photos/thumbs/<album path>/<file>.jpg   thumbnail tier
+```
 
-Public R2 delivery should use a custom domain. Cloudflare documents `r2.dev` as a development URL and recommends custom domains for production controls such as caching and access rules.
+Private bucket content:
 
-## Image Transformations
+```txt
+source-jpeg/
+master/
+staging/
+bin/
+```
 
-The public site builds fixed Cloudflare image transformation URLs in production. Keep widths constrained to the sets in `src/lib/images.ts` to control caching and transformation cost.
+The initial import contains 624 public JPEG objects for 9 accepted albums and 312
+photos: one thumbnail and one display file per photo. Sampled objects were downloaded
+from R2 after upload and matched the local SHA-256 hashes. No image bytes are stored in
+Git.
+
+`yakov-next-cache` is infrastructure storage for OpenNext prerender entries. It must not
+be used for portfolio media.
+
+## D1
+
+D1 stores metadata and relationships only:
+
+- sets and set-album ordering;
+- albums;
+- canonical photos;
+- album-photo membership and ordering;
+- asset records and R2 keys;
+- tags;
+- statuses and publication state;
+- upload jobs and bin records.
+
+The migration stores canonical photos independently and keeps album-specific `position` in `album_photos`.
+
+Local and production verification completed on 2026-07-18:
+
+- `0001_archive.sql` applied successfully with 23 commands;
+- `archive_albums`, `archive_photos`, `album_photos`, and `archive_assets` exist;
+- `PRAGMA foreign_key_check` returned no violations.
+- a JPEG was uploaded through the local OpenNext Worker into private R2;
+- the matching Photo, AlbumPhoto, Asset, and UploadJob rows were written to D1;
+- the protected asset endpoint returned byte-identical JPEG data;
+- the same archive route works in both `opennextjs-cloudflare preview` and `pnpm dev`.
+- production D1 contains 9 albums, 312 photos, 312 album memberships, 624 real asset
+  records, 1 set, and 11 tags;
+- production `PRAGMA foreign_key_check` returned no violations;
+- the seed is idempotent and contains only the real `thumb` and `display` assets.
 
 ## Admin Access
 
-Initial admin access should be protected through Cloudflare Access for the owner email:
+Protect `/admin/*` with Cloudflare Access for the owner email:
 
 ```txt
 Jacobjshmol@gmail.com
 ```
 
-Application-level login can come later for comments, selected users, and private downloads.
+Application-level login is not required for the first upload milestone.
 
-## Future Bindings
+The application API verifies Cloudflare Access on non-local hosts. The expected
+email is configured as the non-secret `ADMIN_EMAIL` Worker variable; requests without a
+matching Access identity fail closed.
 
-The admin/backend phase will likely need:
+Until the Access application exists, `ADMIN_ACCESS_ENABLED=false` makes external
+`/admin` return 404 and `/api/admin/*` return 503. Localhost remains available for
+development.
 
-```txt
-R2 public bucket binding
-R2 private bucket binding
-D1 database binding
-Queue binding for image processing jobs
-```
+## Remote Change Policy
 
-Specific `wrangler` configuration should be added when the admin Worker or Pages Functions layer is implemented.
+Cloudflare resources and deployments should be inspected and changed through Wrangler
+or the Cloudflare API. Browser automation is not the default path.
+
+Before any remote create, migration, upload, binding change, domain switch, or deploy:
+
+1. provide a short pre-action brief with exact resource names and environment;
+2. confirm ambiguous names or destructive effects with the owner;
+3. run the command through Wrangler/API;
+4. report the result without exposing tokens or secrets.
+
+The current production resources were created and populated through Wrangler/API after
+explicit owner approval. The older unrelated R2 buckets `cards`, `mbst1`, and `yakov`
+were not touched.
+
+## Secrets
+
+Never commit:
+
+- `.env` or `.dev.vars`;
+- Cloudflare API tokens;
+- R2 access keys;
+- account IDs when they are not required as non-secret deployment config;
+- private media URLs or signed URLs;
+- uploaded JPEGs, RAW, TIFF, thumbnails, or generated derivatives.
+
+Repository-safe files include binding names, schema/migrations, Worker configuration without secrets, and `.env.example` placeholders.
+
+## Current Audit Status
+
+As of 2026-07-18:
+
+- Next.js 16.2.6 builds successfully with `@opennextjs/cloudflare` 1.20.1;
+- the generated Worker serves `/`, real album routes, and `/api/health` on
+  `yakov-viewer.jacobjshmol.workers.dev`;
+- local D1 and both local R2 bindings are visible to the Worker;
+- the direct multipart JPEG path has passed a local D1/R2 round-trip test;
+- the R2 custom domain `assets.yakov.shmol.cc` is active with TLS 1.2 minimum;
+- clean-browser production QA loaded the 9 real album covers and all 36 photos in the
+  checked album with zero failed images or console errors;
+- external `/admin` is hidden and the admin API is disabled until Access is ready;
+- `yakov.shmol.cc/*` is live on the OpenNext Worker through a zone Worker Route;
+- the old Pages custom-domain attachment is removed, but the Pages project remains
+  available for rollback;
+- GitHub Workers Builds and Cloudflare Access are not configured yet.

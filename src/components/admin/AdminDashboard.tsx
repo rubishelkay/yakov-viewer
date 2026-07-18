@@ -19,6 +19,7 @@ import {
   useAdminArchive
 } from "@/admin/admin-state";
 import { formatBytes } from "@/admin/repository";
+import { AdminDemoBadge } from "@/components/admin/AdminDemoBadge";
 import { useAdminConfirmDialog } from "@/components/admin/AdminConfirmDialog";
 import type { LocalArchiveAlbum, LocalArchivePhoto } from "@/admin/admin-state";
 
@@ -201,7 +202,10 @@ function AlbumRow({ album }: { album: LocalArchiveAlbum }) {
         <strong>{album.title}</strong>
         <span>{album.subtitle || "No subtitle"}</span>
       </div>
-      <span className="admin-status" data-status={album.status}>{album.status}</span>
+      <span className="admin-row-badges">
+        {album.isDemo ? <AdminDemoBadge /> : null}
+        <span className="admin-status" data-status={album.status}>{album.status}</span>
+      </span>
       <span>{setCount || "No"} sets</span>
     </div>
   );

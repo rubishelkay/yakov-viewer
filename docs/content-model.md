@@ -7,8 +7,9 @@ The archive should use this hierarchy:
 ```txt
 Set
   Album
-    Photo
-      Asset versions
+    AlbumPhoto
+      Photo
+        Asset versions
 
 Collection
   Selected photos from many albums
@@ -22,6 +23,8 @@ The main entity is the album. An album is similar to a folder or a roll of film:
 Sets are large public/editorial sections made from albums. On the homepage, a set can behave like one screen or one long section: for example `Bangkok`, `Mountains`, or `Milky Way Timelapse`.
 
 Albums may belong to multiple sets. Sets do not have tags themselves in the current model.
+
+Photos may belong to multiple albums. A photo is stored once; album membership and album-specific order are stored in a join record.
 
 Examples:
 
@@ -159,6 +162,7 @@ slug
 title
 description
 status
+isDemo
 setIds
 tagIds
 publicDownloadPolicy
@@ -179,6 +183,8 @@ publishedAt
 
 `publicDownloadPolicy` is the album-level default for whether visitors can download/open larger public files. Individual photos can override it.
 
+`isDemo` marks development fixture albums. It is an admin aid only: real albums created through the admin default to `false`.
+
 The uploaded source JPEG should not be public by default if it is a large 5-30 MB file. The public site should normally use optimized web assets.
 
 ## Photos
@@ -187,7 +193,6 @@ Recommended photo fields:
 
 ```txt
 id
-albumId
 slug
 title
 description
@@ -211,6 +216,21 @@ publishedAt
 hiddenAt
 deletedAt
 ```
+
+Recommended `AlbumPhoto` fields:
+
+```txt
+albumId
+photoId
+position
+createdAt
+```
+
+The pair `(albumId, photoId)` is unique. Reusing a photo in another album creates another membership row and does not duplicate `Photo` or `Asset` records.
+
+As of the July 2026 local migration, `AlbumPhoto` is canonical in Zod types, seeds, local state, ordering actions, public projections, and the D1 draft. Browser archives saved under localStorage version 3 are migrated to version 4 on load; IndexedDB preview IDs stay attached to canonical assets and are not rewritten.
+
+For the first version, effective public tags are the union of direct photo tags and tags inherited from all published album memberships. This rule can later become configurable if curated albums should not contribute inherited tags.
 
 ## Statuses
 

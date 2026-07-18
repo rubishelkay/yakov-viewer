@@ -4,17 +4,27 @@ import {
   adminArchiveSchema,
   type AdminArchive,
   type ArchiveAlbum,
+  type ArchiveAlbumPhoto,
   type ArchiveAsset,
   type ArchivePhoto,
   type ArchiveSet,
   type ArchiveTag,
   type SetLayoutMode
 } from "./archive-schema";
+import { defaultAdminSettings } from "./default-settings";
+import {
+  portfolioAlbumPhotos,
+  portfolioAlbums,
+  portfolioAssets,
+  portfolioPhotos,
+  portfolioSet,
+  portfolioTags
+} from "./portfolio-seed";
 
 const now = "2026-05-12T10:00:00+07:00";
 const later = "2026-05-19T10:00:00+07:00";
 
-const tags: ArchiveTag[] = [
+const baseTags: ArchiveTag[] = [
   makeTag("tag-film", "film", "Film", "both"),
   makeTag("tag-digital", "digital", "Digital", "both"),
   makeTag("tag-bangkok", "bangkok", "Bangkok", "both"),
@@ -30,6 +40,10 @@ const tags: ArchiveTag[] = [
   makeTag("tag-review", "review", "Review", "photo"),
   makeTag("tag-2025", "2025", "2025", "both")
 ];
+
+const tags: ArchiveTag[] = Array.from(
+  new Map([...portfolioTags, ...baseTags].map((tag) => [tag.id, tag])).values()
+);
 
 type AlbumSeed = {
   id: string;
@@ -170,18 +184,19 @@ const albumSeeds: AlbumSeed[] = [
   }
 ];
 
-const albums: ArchiveAlbum[] = albumSeeds.map((album, index) => {
+const demoAlbums: ArchiveAlbum[] = albumSeeds.map((album, index) => {
   const firstPhotoId = photoIdFor(album.id, 1);
 
   return {
     ...album,
     slug: album.id.replace(/^album-/, ""),
     description: `${album.subtitle}. This is mock archive content for the first admin shell.`,
+    isDemo: true,
     publicDownloadPolicy: "inherit",
     coverLandscapeAssetId: assetId(firstPhotoId, "display"),
     coverPortraitAssetId: assetId(firstPhotoId, "display"),
     coverSquareAssetId: assetId(firstPhotoId, "thumb"),
-    sortOrder: index,
+    sortOrder: portfolioAlbums.length + index,
     dateStart: "2025-01-15",
     dateEnd: "2025-01-15",
     createdAt: now,
@@ -190,7 +205,7 @@ const albums: ArchiveAlbum[] = albumSeeds.map((album, index) => {
   };
 });
 
-const photos: ArchivePhoto[] = albumSeeds.flatMap((album, albumIndex) =>
+const demoPhotos: ArchivePhoto[] = albumSeeds.flatMap((album, albumIndex) =>
   photoPositionsForAlbum(album).map((position) => {
     const sourceIndex = album.id === "album-film-073" ? position - 1 : albumIndex * 3 + position - 1;
     const source = publicSeedPhotos[sourceIndex % publicSeedPhotos.length];
@@ -199,12 +214,10 @@ const photos: ArchivePhoto[] = albumSeeds.flatMap((album, albumIndex) =>
 
     return {
       id: photoId,
-      albumId: album.id,
       slug: photoId.replace(/^photo-/, ""),
       title: `${album.title} ${String(position).padStart(2, "0")}`,
       description: "Mock frame for admin upload, tagging, cover, and review flows.",
       status: album.status === "published" ? "published" : album.status === "hidden" ? "hidden" : "review",
-      position,
       frameNumber: position,
       tagIds: directTagIds,
       assetIds: [
@@ -227,7 +240,16 @@ const photos: ArchivePhoto[] = albumSeeds.flatMap((album, albumIndex) =>
   })
 );
 
-const assets: ArchiveAsset[] = photos.flatMap((photo, index) => {
+const demoAlbumPhotos: ArchiveAlbumPhoto[] = albumSeeds.flatMap((album) =>
+  photoPositionsForAlbum(album).map((position) => ({
+    albumId: album.id,
+    photoId: photoIdFor(album.id, position),
+    position,
+    createdAt: now
+  }))
+);
+
+const demoAssets: ArchiveAsset[] = demoPhotos.flatMap((photo, index) => {
   const source = publicSeedPhotos[index % publicSeedPhotos.length];
   const publicUrl = `${source.r2.assetBaseUrl}/${source.r2.originalKey}`;
 
@@ -240,7 +262,7 @@ const assets: ArchiveAsset[] = photos.flatMap((photo, index) => {
   ];
 });
 
-const sets: ArchiveSet[] = [
+const demoSets: ArchiveSet[] = [
   makeSet("set-bangkok", "bangkok", "Bangkok nights", "Film and digital albums from Bangkok.", "published", 1, "fullscreen-carousel", [
     "album-bangkok-neon",
     "album-film-073",
@@ -275,9 +297,16 @@ const sets: ArchiveSet[] = [
   ])
 ];
 
+const albums = [...portfolioAlbums, ...demoAlbums];
+const albumPhotos = [...portfolioAlbumPhotos, ...demoAlbumPhotos];
+const photos = [...portfolioPhotos, ...demoPhotos];
+const assets = [...portfolioAssets, ...demoAssets];
+const sets = [portfolioSet, ...demoSets];
+
 export const adminArchive: AdminArchive = adminArchiveSchema.parse({
   sets,
   albums,
+  albumPhotos,
   photos,
   assets,
   tags,
@@ -294,18 +323,7 @@ export const adminArchive: AdminArchive = adminArchiveSchema.parse({
       updatedAt: now
     }
   ],
-  settings: {
-    defaultAlbumStatus: "draft",
-    defaultPhotoStatus: "review",
-    expandedTargetMb: 2.5,
-    publicDownloadMode: "downloadJpeg",
-    downloadJpegTargetMb: 3.8,
-    sourceJpegPublicAllowed: false,
-    trashRetentionDays: 7,
-    derivativeColorProfile: "srgb",
-    sourceJpegPolicy: "preserve",
-    publicExifPolicy: "strip-sensitive"
-  },
+  settings: defaultAdminSettings,
   trash: [
     {
       id: "trash-old-import-01",
@@ -390,7 +408,7 @@ function makeAsset(
     version,
     access,
     bucket: access === "public" ? "yakov-public-assets" : "yakov-private-assets",
-    key: `${version}/${photo.albumId}/${photo.slug}.jpg`,
+    key: `${version}/${photo.id}/${photo.slug}.jpg`,
     publicUrl,
     width,
     height,
