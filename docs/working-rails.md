@@ -110,9 +110,11 @@ Current status:
   direction-aware auto-hiding header.
 - Controlled album tags now have first public `/tags/[slug]` pages. Multi-tag filtering
   remains a later archive milestone.
-- The July 18 viewing/tag release is live as Worker version
-  `d2e569fc-2989-4560-acf6-d4c4c1c7b77f`; production D1 migration
-  `0002_album_photo_order.sql` is applied and the foreign-key check is clean.
+- The July 18 frontend refinement is live as Worker version
+  `a9597abb-b7cd-4ee6-9a37-1816f87302d8`: JS favicon, stable header controls,
+  Safari-safe contained viewer, equal-height M rows, and album-based tag results.
+  Production D1 migration `0002_album_photo_order.sql` remains applied and its
+  foreign-key check is clean.
 
 ## Immediate Roadmap
 
