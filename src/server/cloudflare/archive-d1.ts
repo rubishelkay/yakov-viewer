@@ -46,6 +46,7 @@ type AlbumRow = {
   cover_portrait_asset_id: string | null;
   cover_square_asset_id: string | null;
   sort_order: number;
+  photo_order_direction: ArchiveAlbum["photoOrderDirection"] | null;
   date_start: string | null;
   date_end: string | null;
   location_text: string | null;
@@ -284,6 +285,7 @@ export async function createD1Album(
     tagIds: [],
     publicDownloadPolicy: input.publicDownloadPolicy ?? defaultAdminSettings.publicDownloadMode,
     sortOrder: orderRow?.next_order ?? 0,
+    photoOrderDirection: "forward",
     createdAt: timestamp,
     updatedAt: timestamp
   };
@@ -292,8 +294,8 @@ export async function createD1Album(
     .prepare(`
       INSERT INTO archive_albums (
         id, slug, title, subtitle, description, status, is_demo,
-        public_download_policy, sort_order, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        public_download_policy, sort_order, photo_order_direction, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
     .bind(
       album.id,
@@ -305,6 +307,7 @@ export async function createD1Album(
       0,
       album.publicDownloadPolicy,
       album.sortOrder,
+      album.photoOrderDirection,
       album.createdAt,
       album.updatedAt
     )
@@ -472,6 +475,7 @@ function mapAlbum(
     coverPortraitAssetId: optional(row.cover_portrait_asset_id),
     coverSquareAssetId: optional(row.cover_square_asset_id),
     sortOrder: row.sort_order,
+    photoOrderDirection: row.photo_order_direction ?? "forward",
     dateStart: optional(row.date_start),
     dateEnd: optional(row.date_end),
     locationText: optional(row.location_text),

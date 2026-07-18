@@ -5,6 +5,8 @@ import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { type LocalArchivePhoto, useAdminArchive } from "@/admin/admin-state";
+import { PortfolioImage } from "@/components/portfolio/PortfolioImage";
+import { PortfolioTagLinks } from "@/components/portfolio/PortfolioTagLinks";
 import {
   getPortfolioPhotoSources,
   getPublicAlbumBySlug,
@@ -61,7 +63,7 @@ export function PortfolioAlbum({ slug }: { slug: string }) {
       <header className="portfolio-album-head">
         <div>
           <h1>{album.title}</h1>
-          <p>{album.subtitle} <span>· {photos.length}</span></p>
+          <p><PortfolioTagLinks album={album} archive={archive} count={photos.length} /></p>
         </div>
         <ViewModeToggle mode={mode} onChange={setViewMode} />
       </header>
@@ -204,7 +206,7 @@ function PhotoButton({
       type="button"
     >
       {source ? (
-        <img
+        <PortfolioImage
           alt={photo.title}
           decoding="async"
           height={photo.height}
@@ -239,6 +241,7 @@ function PortfolioViewer({
   const closeRef = useRef<HTMLButtonElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
   const touchStart = useRef<number | null>(null);
+  const suppressStageClick = useRef(false);
   const [controls, setControls] = useState(true);
   const [zoomed, setZoomed] = useState(false);
   const hideTimer = useRef<number | undefined>(undefined);
@@ -310,15 +313,25 @@ function PortfolioViewer({
     >
       <button
         aria-label={zoomed ? "Reset zoom" : "Zoom photo"}
+        aria-pressed={zoomed}
         className="portfolio-viewer__stage"
         data-zoomed={zoomed ? "true" : undefined}
-        onClick={() => setControls((value) => !value)}
-        onDoubleClick={() => setZoomed((value) => !value)}
+        onClick={() => {
+          if (suppressStageClick.current) return;
+          setZoomed((value) => !value);
+          wakeControls();
+        }}
         onTouchEnd={(event) => {
           const start = touchStart.current;
           touchStart.current = null;
           if (start === null) return;
           const delta = event.changedTouches[0].clientX - start;
+          if (Math.abs(delta) > 55) {
+            suppressStageClick.current = true;
+            window.setTimeout(() => {
+              suppressStageClick.current = false;
+            }, 400);
+          }
           if (delta > 55) previous();
           if (delta < -55) next();
         }}
@@ -328,7 +341,17 @@ function PortfolioViewer({
         }}
         type="button"
       >
-        {source ? <img alt={photo.title} draggable={false} height={photo.height} src={source} width={photo.width} /> : null}
+        {source ? (
+          <PortfolioImage
+            alt={photo.title}
+            draggable={false}
+            height={photo.height}
+            key={photo.id}
+            src={source}
+            width={photo.width}
+            wrapperClassName="portfolio-viewer__image"
+          />
+        ) : null}
       </button>
       <button aria-label="Close viewer" className="portfolio-viewer__control portfolio-viewer__close" onClick={onClose} ref={closeRef} type="button">
         <X aria-hidden />

@@ -5,6 +5,8 @@ import { ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useAdminArchive } from "@/admin/admin-state";
+import { PortfolioImage } from "@/components/portfolio/PortfolioImage";
+import { PortfolioTagLinks } from "@/components/portfolio/PortfolioTagLinks";
 import {
   getAlbumCover,
   getHomepageAlbums,
@@ -62,15 +64,17 @@ export function PortfolioIndex({ hero = false }: { hero?: boolean }) {
             const count = getPublicPhotosForAlbum(archive, album.id).length;
 
             return (
-              <Link className="portfolio-album-card" href={`/albums/${album.slug}`} key={album.id}>
-                <span className="portfolio-album-card__cover">
-                  {cover ? <img alt={`Cover of ${album.title}`} decoding="async" loading="lazy" src={cover} /> : null}
-                </span>
+              <article className="portfolio-album-card" key={album.id}>
+                <Link aria-label={`Open ${album.title}`} href={`/albums/${album.slug}`}>
+                  <span className="portfolio-album-card__cover">
+                    {cover ? <PortfolioImage alt={`Cover of ${album.title}`} decoding="async" loading="lazy" src={cover} /> : null}
+                  </span>
+                </Link>
                 <span className="portfolio-album-card__meta">
-                  <strong>{album.title}</strong>
-                  <small>{album.subtitle}{count ? ` · ${count}` : ""}</small>
+                  <Link href={`/albums/${album.slug}`}><strong>{album.title}</strong></Link>
+                  <small><PortfolioTagLinks album={album} archive={archive} count={count} /></small>
                 </span>
-              </Link>
+              </article>
             );
           })}
         </div>
@@ -100,14 +104,14 @@ function PortfolioHero({ albums }: { albums: ReturnType<typeof getHeroAlbums> })
       {albums.map((album, index) => {
         const cover = getAlbumCover(archive, previewUrls, album);
         return cover ? (
-          <img
+          <PortfolioImage
             alt={`Cover of ${album.title}`}
-            className={index === active ? "is-active" : undefined}
             decoding="async"
             fetchPriority={index === 0 ? "high" : "low"}
             key={album.id}
             loading={index === 0 ? "eager" : "lazy"}
             src={cover}
+            wrapperClassName={index === active ? "is-active" : undefined}
           />
         ) : null;
       })}

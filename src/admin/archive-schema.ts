@@ -33,6 +33,7 @@ export const assetVersionSchema = z.enum([
 export const tagScopeSchema = z.enum(["album", "photo", "both"]);
 export const assetAccessSchema = z.enum(["public", "private"]);
 export const publicDownloadPolicySchema = z.enum(["inherit", "none", "expanded", "downloadJpeg"]);
+export const photoOrderDirectionSchema = z.enum(["forward", "reverse"]);
 export const uploadJobStatusSchema = z.enum(["queued", "uploading", "processing", "review", "failed"]);
 
 const timestampSchema = z.string().min(1);
@@ -74,6 +75,7 @@ export const archiveAlbumSchema = z.object({
   coverPortraitAssetId: z.string().min(1).optional(),
   coverSquareAssetId: z.string().min(1).optional(),
   sortOrder: z.number().int().default(0),
+  photoOrderDirection: photoOrderDirectionSchema.default("forward"),
   dateStart: z.string().optional(),
   dateEnd: z.string().optional(),
   locationText: z.string().optional(),
@@ -231,6 +233,7 @@ export type SetLayoutMode = z.infer<typeof setLayoutModeSchema>;
 export type AssetVersion = z.infer<typeof assetVersionSchema>;
 export type TagScope = z.infer<typeof tagScopeSchema>;
 export type PublicDownloadPolicy = z.infer<typeof publicDownloadPolicySchema>;
+export type PhotoOrderDirection = z.infer<typeof photoOrderDirectionSchema>;
 export type ArchiveSet = z.infer<typeof archiveSetSchema>;
 export type ArchiveAlbum = z.infer<typeof archiveAlbumSchema>;
 export type ArchiveAlbumPhoto = z.infer<typeof albumPhotoSchema>;

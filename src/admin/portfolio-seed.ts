@@ -53,6 +53,7 @@ export const portfolioAlbums: ArchiveAlbum[] = portfolioManifest.albums.map((alb
     coverPortraitAssetId: portfolioAssetId(coverImage.id, "display"),
     coverSquareAssetId: portfolioAssetId(coverImage.id, "thumb"),
     sortOrder: album.order,
+    photoOrderDirection: "forward",
     dateStart: album.year ? `${album.year}-01-01` : undefined,
     dateEnd: album.year ? `${album.year}-12-31` : undefined,
     locationText: album.location || undefined,

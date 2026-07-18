@@ -197,6 +197,7 @@ const demoAlbums: ArchiveAlbum[] = albumSeeds.map((album, index) => {
     coverPortraitAssetId: assetId(firstPhotoId, "display"),
     coverSquareAssetId: assetId(firstPhotoId, "thumb"),
     sortOrder: portfolioAlbums.length + index,
+    photoOrderDirection: "forward",
     dateStart: "2025-01-15",
     dateEnd: "2025-01-15",
     createdAt: now,

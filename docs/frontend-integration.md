@@ -36,6 +36,17 @@ The parent folder is about 1.2 GB because `dist` duplicates the media. Neither `
 - keyboard, click, swipe, zoom, focus trapping, and deep-linked photo state;
 - quiet typography and photo-first spacing.
 
+Current viewing rules:
+
+- M mode uses a fixed responsive grid, so an incomplete final row keeps the same item
+  dimensions as every previous row;
+- L mode preserves the natural frame but caps landscape images to the visible browser
+  height;
+- image surfaces show a compact spinner until the selected asset has decoded or failed;
+- the fullscreen viewer uses a reliable single click/tap to toggle zoom, including Safari;
+- the minimal header hides while scrolling down and returns while scrolling up;
+- header icon buttons keep stable dimensions and only change the cursor on hover.
+
 ## Integration Direction
 
 The current Next.js repository stays canonical. Port the accepted public components into the public route group and adapt them to a shared public repository/read model.
@@ -89,7 +100,10 @@ The accepted visual style stays, but content comes from admin-managed Sets:
 - album cards use landscape covers by default;
 - fixtures may temporarily reuse covers while the real R2 import is incomplete.
 
-The first integrated frontend does not need All Photos, public tag search, public downloads, or Logjamming controls.
+The first integrated frontend still does not need public downloads or Logjamming
+controls. A compact first tag slice now exists: controlled tags in album subtitles link
+to `/tags/[slug]`, where published, non-hidden photos with that effective tag are shown.
+Search and multi-tag `AND` filtering remain later work.
 
 ## Real Content Import
 
@@ -123,9 +137,11 @@ The import must be idempotent so it can be tested without duplicating rows or R2
    display assets only.
 7. Completed remotely: technical OpenNext Worker, R2 incremental cache, active asset
    domain, and clean-browser media QA.
-8. Next: move `yakov.shmol.cc` from the retained Pages project to the verified Worker.
-9. Next: configure Cloudflare Access, enable the external admin, and switch the admin
+8. Completed remotely: `yakov.shmol.cc` now routes to the verified Worker.
+9. In progress locally: viewing polish, reverse film order, and first public tag routes.
+10. Next: configure Cloudflare Access, enable the external admin, and switch the admin
    repository from local persistence to the full Cloudflare API as one coherent unit.
-10. Later: derivative processing, expanded/download tiers, and GitHub Workers Builds.
+11. Later: derivative processing, expanded/download tiers, multi-tag archive filtering,
+    and GitHub Workers Builds.
 
 Logjamming begins only after the shared archive contract and first real upload are stable.

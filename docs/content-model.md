@@ -169,6 +169,7 @@ publicDownloadPolicy
 coverLandscapeAssetId
 coverPortraitAssetId
 coverSquareAssetId
+photoOrderDirection
 sortOrder
 setSortOrders
 dateStart
@@ -184,6 +185,10 @@ publishedAt
 `publicDownloadPolicy` is the album-level default for whether visitors can download/open larger public files. Individual photos can override it.
 
 `isDemo` marks development fixture albums. It is an admin aid only: real albums created through the admin default to `false`.
+
+`photoOrderDirection` is either `forward` or `reverse`. It changes the album's visual
+order without rewriting every `AlbumPhoto.position`: this is useful when a film scanner
+delivers frames from the last exposure to the first. New albums default to `forward`.
 
 The uploaded source JPEG should not be public by default if it is a large 5-30 MB file. The public site should normally use optimized web assets.
 
@@ -231,6 +236,10 @@ The pair `(albumId, photoId)` is unique. Reusing a photo in another album create
 As of the July 2026 local migration, `AlbumPhoto` is canonical in Zod types, seeds, local state, ordering actions, public projections, and the D1 draft. Browser archives saved under localStorage version 3 are migrated to version 4 on load; IndexedDB preview IDs stay attached to canonical assets and are not rewritten.
 
 For the first version, effective public tags are the union of direct photo tags and tags inherited from all published album memberships. This rule can later become configurable if curated albums should not contribute inherited tags.
+
+The first public tag routes use one controlled tag slug at a time. Album subtitle
+segments that match controlled album tags are rendered as links to `/tags/[slug]`.
+Multi-tag `AND` filtering remains a later archive/search view, not a second tag model.
 
 ## Statuses
 

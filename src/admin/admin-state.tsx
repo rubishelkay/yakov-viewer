@@ -393,6 +393,7 @@ export function AdminArchiveProvider({ children }: Readonly<{ children: React.Re
           tagIds: input.tagIds ?? [],
           publicDownloadPolicy: input.publicDownloadPolicy ?? archive.settings.publicDownloadMode,
           sortOrder: 0,
+          photoOrderDirection: "forward",
           createdAt: timestamp,
           updatedAt: timestamp,
           isDirty: true
@@ -654,10 +655,14 @@ export function getPhotosForAlbumFromArchive(archive: LocalAdminArchive, albumId
   if (!albumId) return [];
 
   const photoById = new Map(archive.photos.map((photo) => [photo.id, photo]));
-
-  return archive.albumPhotos
+  const direction = archive.albums.find((album) => album.id === albumId)?.photoOrderDirection ?? "forward";
+  const memberships = archive.albumPhotos
     .filter((albumPhoto) => albumPhoto.albumId === albumId)
-    .sort((a, b) => a.position - b.position)
+    .sort((a, b) => a.position - b.position);
+
+  if (direction === "reverse") memberships.reverse();
+
+  return memberships
     .map((albumPhoto) => {
       const photo = photoById.get(albumPhoto.photoId);
 
@@ -1023,7 +1028,8 @@ function normalizeStoredArchive(archive: LocalAdminArchive): LocalAdminArchive {
     albumPhotos: normalizeAllAlbumPhotoPositions(archive.albumPhotos ?? []),
     albums: archive.albums.map((album) => ({
       ...album,
-      isDemo: album.isDemo ?? seedDemoAlbumIds.has(album.id)
+      isDemo: album.isDemo ?? seedDemoAlbumIds.has(album.id),
+      photoOrderDirection: album.photoOrderDirection ?? "forward"
     })),
     assets: archive.assets.map((asset) => {
       if (!shouldNormalizeHostedAssets || !asset.publicUrl) return asset;

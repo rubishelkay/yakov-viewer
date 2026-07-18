@@ -30,6 +30,7 @@ import { AdminDemoBadge } from "@/components/admin/AdminDemoBadge";
 import { useAdminConfirmDialog } from "@/components/admin/AdminConfirmDialog";
 import type {
   ArchiveStatus,
+  PhotoOrderDirection,
   PublicDownloadPolicy
 } from "@/admin/archive-schema";
 import type { LocalArchiveAlbum, LocalArchivePhoto, LocalArchivePhotoInAlbum, LocalArchiveTag } from "@/admin/admin-state";
@@ -310,6 +311,17 @@ export function AlbumWorkspace() {
                   {downloadPolicies.map((policy) => <option key={policy} value={policy}>{policy}</option>)}
                 </select>
               </Field>
+              <Field label="Frame order">
+                <select
+                  value={selectedAlbum.photoOrderDirection}
+                  onChange={(event) => actions.updateAlbum(selectedAlbum.id, {
+                    photoOrderDirection: event.target.value as PhotoOrderDirection
+                  })}
+                >
+                  <option value="forward">First to last</option>
+                  <option value="reverse">Last to first</option>
+                </select>
+              </Field>
             </div>
 
             <CoverPriorityPicker album={selectedAlbum} />
@@ -548,6 +560,8 @@ function PhotoInspector({
   const thumbAssetId = photo.assetIds.find((assetId) => assetId.endsWith("-thumb")) ?? displayAssetId;
   const imageUrl = getPhotoDisplayUrlFromArchive(archive, previewUrls, photo);
   const isHidden = photo.status === "hidden";
+  const isReversed = album.photoOrderDirection === "reverse";
+  const displayPosition = photoIndex + 1;
   const fileSize = formatBytes(photo.sourceBytes ?? assetBytes(photo.id, archive.assets));
   const inheritedTags = album.tagIds
     .map((tagId) => archive.tags.find((tag) => tag.id === tagId))
@@ -605,7 +619,11 @@ function PhotoInspector({
       <div className="admin-subsection">
         <h4>Photo actions</h4>
         <div className="admin-photo-action-grid">
-          <button disabled={photoIndex <= 0} onClick={() => actions.reorderPhoto(album.id, photo.id, "up")} type="button">
+          <button
+            disabled={photoIndex <= 0}
+            onClick={() => actions.reorderPhoto(album.id, photo.id, isReversed ? "down" : "up")}
+            type="button"
+          >
             <ArrowUp aria-hidden />
             Move up
           </button>
@@ -615,12 +633,22 @@ function PhotoInspector({
               aria-label={`Position for ${photo.title}`}
               max={photosCount}
               min={1}
-              onChange={(event) => actions.movePhotoToPosition(album.id, photo.id, Number(event.target.value))}
+              onChange={(event) => {
+                const nextDisplayPosition = Number(event.target.value);
+                const nextStoredPosition = isReversed
+                  ? photosCount - nextDisplayPosition + 1
+                  : nextDisplayPosition;
+                actions.movePhotoToPosition(album.id, photo.id, nextStoredPosition);
+              }}
               type="number"
-              value={photo.position}
+              value={displayPosition}
             />
           </label>
-          <button disabled={photoIndex < 0 || photoIndex >= photosCount - 1} onClick={() => actions.reorderPhoto(album.id, photo.id, "down")} type="button">
+          <button
+            disabled={photoIndex < 0 || photoIndex >= photosCount - 1}
+            onClick={() => actions.reorderPhoto(album.id, photo.id, isReversed ? "up" : "down")}
+            type="button"
+          >
             <ArrowDown aria-hidden />
             Move down
           </button>

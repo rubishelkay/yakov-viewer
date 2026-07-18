@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Shuffle } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useAdminArchive } from "@/admin/admin-state";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
@@ -14,6 +14,8 @@ export function PortfolioHeader() {
   const router = useRouter();
   const { archive } = useAdminArchive();
   const [overHero, setOverHero] = useState(pathname === "/");
+  const [hidden, setHidden] = useState(false);
+  const lastScrollY = useRef(0);
 
   useEffect(() => {
     if (pathname !== "/") return;
@@ -35,6 +37,32 @@ export function PortfolioHeader() {
     };
   }, [pathname]);
 
+  useEffect(() => {
+    let frame = 0;
+    lastScrollY.current = window.scrollY;
+    frame = requestAnimationFrame(() => setHidden(false));
+
+    const update = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const current = Math.max(0, window.scrollY);
+        const delta = current - lastScrollY.current;
+
+        if (current <= 12) setHidden(false);
+        else if (delta > 6) setHidden(true);
+        else if (delta < -6) setHidden(false);
+
+        if (Math.abs(delta) > 2) lastScrollY.current = current;
+      });
+    };
+
+    window.addEventListener("scroll", update, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", update);
+    };
+  }, [pathname]);
+
   function openRandomPhoto() {
     const choices = getPublicAlbums(archive)
       .map((album) => ({ album, photos: getPublicPhotosForAlbum(archive, album.id) }))
@@ -46,8 +74,14 @@ export function PortfolioHeader() {
     router.push(`/albums/${choice.album.slug}?photo=${photoIndex + 1}`);
   }
 
+  const headerClassName = [
+    "portfolio-header",
+    pathname === "/" && overHero ? "portfolio-header--overlay" : "",
+    hidden ? "portfolio-header--hidden" : ""
+  ].filter(Boolean).join(" ");
+
   return (
-    <header className={pathname === "/" && overHero ? "portfolio-header portfolio-header--overlay" : "portfolio-header"}>
+    <header className={headerClassName}>
       <Link className="portfolio-title" href="/">
         Yakov Shmol
       </Link>

@@ -5,7 +5,8 @@ import {
   getPhotosForAlbumFromArchive,
   type LocalAdminArchive,
   type LocalArchiveAlbum,
-  type LocalArchivePhoto
+  type LocalArchivePhoto,
+  type LocalArchiveTag
 } from "@/admin/admin-state";
 
 export type PreviewUrls = Record<string, string>;
@@ -88,6 +89,42 @@ export function getPublicPhotosForAlbum(archive: LocalAdminArchive, albumId: str
   );
 }
 
+export function getPublicTagBySlug(archive: LocalAdminArchive, slug: string) {
+  return archive.tags.find((tag) => tag.slug === slug);
+}
+
+export function getPublicPhotosForTag(archive: LocalAdminArchive, tagId: string) {
+  const seen = new Set<string>();
+
+  return getPublicAlbums(archive).flatMap((album) => {
+    const albumHasTag = album.tagIds.includes(tagId);
+
+    return getPublicPhotosForAlbum(archive, album.id)
+      .map((photo, index) => ({ album, index, photo }))
+      .filter(({ photo }) => albumHasTag || photo.tagIds.includes(tagId))
+      .filter(({ photo }) => {
+        if (seen.has(photo.id)) return false;
+        seen.add(photo.id);
+        return true;
+      });
+  });
+}
+
+export function getAlbumSubtitleTags(archive: LocalAdminArchive, album: LocalArchiveAlbum) {
+  const tags = album.tagIds
+    .map((tagId) => archive.tags.find((tag) => tag.id === tagId))
+    .filter((tag): tag is LocalArchiveTag => Boolean(tag));
+
+  return album.subtitle
+    .split(",")
+    .map((label) => label.trim())
+    .filter(Boolean)
+    .map((label) => ({
+      label,
+      tag: tags.find((tag) => normalizeTagLabel(tag.label) === normalizeTagLabel(label))
+    }));
+}
+
 export function getAlbumCover(
   archive: LocalAdminArchive,
   previewUrls: PreviewUrls,
@@ -113,4 +150,8 @@ export function isFilmAlbum(album: LocalArchiveAlbum) {
 
 function isPublicAlbum(album: LocalArchiveAlbum) {
   return album.status === "published" && !album.isDemo;
+}
+
+function normalizeTagLabel(value: string) {
+  return value.trim().toLocaleLowerCase("en");
 }
