@@ -111,8 +111,9 @@ Current status:
 - Controlled album tags now have first public `/tags/[slug]` pages. Multi-tag filtering
   remains a later archive milestone.
 - The July 18 frontend refinement is live as Worker version
-  `a9597abb-b7cd-4ee6-9a37-1816f87302d8`: JS favicon, stable header controls,
-  Safari-safe contained viewer, equal-height M rows, and album-based tag results.
+  `3000d166-ad54-4963-9b17-2aaf52f0bdf0`: JS favicon, stable header controls,
+  Safari-safe contained viewer with point-aware zoom and drag panning, edge-to-edge
+  justified M rows, and album-based tag results.
   Production D1 migration `0002_album_photo_order.sql` remains applied and its
   foreign-key check is clean.
 
