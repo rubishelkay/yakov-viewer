@@ -1145,18 +1145,31 @@ img {
 }
 
 .portfolio-grid-m {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: start;
+  display: grid;
   gap: 7px;
 }
 
-.portfolio-grid-m .portfolio-photo-button {
-  flex: 0 0 auto;
-  width: auto;
+.portfolio-grid-m__row {
+  display: flex;
+  width: 100%;
+  height: var(--row-height);
+  gap: 7px;
+  overflow: hidden;
+}
+
+.portfolio-grid-m__row .portfolio-photo-button {
+  min-width: 0;
   max-width: 100%;
-  height: clamp(150px, 13vw, 250px);
+  height: 100%;
   aspect-ratio: var(--photo-ratio);
+}
+
+.portfolio-grid-m__row[data-filled="true"] .portfolio-photo-button {
+  flex: var(--photo-ratio-number) 1 0;
+}
+
+.portfolio-grid-m__row[data-filled="false"] .portfolio-photo-button {
+  flex: 0 0 var(--justified-width);
 }
 
 .portfolio-grid-m .portfolio-photo-button img {
@@ -1228,6 +1241,10 @@ img {
   cursor: zoom-out;
 }
 
+.portfolio-viewer__stage[data-dragging="true"] {
+  cursor: grabbing;
+}
+
 .portfolio-viewer__image {
   position: absolute;
   inset: 0;
@@ -1246,11 +1263,15 @@ img {
   user-select: none;
   -webkit-user-drag: none;
   transition: transform 260ms var(--ease-standard);
-  transform-origin: center;
+  transform-origin: var(--viewer-origin-x, 50%) var(--viewer-origin-y, 50%);
 }
 
 .portfolio-viewer__stage[data-zoomed="true"] img {
-  transform: scale(2.2);
+  transform: translate3d(var(--viewer-pan-x, 0), var(--viewer-pan-y, 0), 0) scale(2.2);
+}
+
+.portfolio-viewer__stage[data-dragging="true"] img {
+  transition: none;
 }
 
 .portfolio-viewer__control {
@@ -1351,7 +1372,6 @@ img {
 
 @media (max-width: 980px) {
   .portfolio-album-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .portfolio-grid-m .portfolio-photo-button { height: clamp(135px, 18vw, 190px); }
 }
 
 @media (max-width: 640px) {
@@ -1361,7 +1381,6 @@ img {
   .portfolio-album-grid { grid-template-columns: 1fr; }
   .portfolio-album-page { padding-top: calc(var(--portfolio-header-height) + 30px); }
   .portfolio-grid-s { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .portfolio-grid-m .portfolio-photo-button { height: 112px; }
   .portfolio-tag-page { padding-top: calc(var(--portfolio-header-height) + 30px); }
   .portfolio-viewer__arrow, .portfolio-viewer__title { display: none; }
 }

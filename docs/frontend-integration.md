@@ -38,14 +38,16 @@ The parent folder is about 1.2 GB because `dist` duplicates the media. Neither `
 
 Current viewing rules:
 
-- M mode uses equal-height flex rows: landscape, portrait, and panorama frames keep
-  their natural proportions, while portrait frames become narrower instead of making
-  a row taller or leaving a large vertical gap;
+- M mode uses responsive justified rows: every completed row scales its frames by one
+  shared factor to reach both edges without cropping or internal gaps; mixed landscape,
+  portrait, and panorama rows may have different heights, while the final row stays
+  naturally left-aligned instead of being over-stretched;
 - L mode preserves the natural frame but caps landscape images to the visible browser
   height;
 - image surfaces show a compact spinner until the selected asset has decoded or failed;
 - the fullscreen viewer explicitly contains the complete frame inside the viewport,
-  including Safari; a reliable single click/tap then toggles the enlarged view;
+  including Safari; the first click/tap enlarges around the selected point, a short
+  second click resets zoom, and a zoomed frame can be panned with a mouse drag;
 - the minimal header hides while scrolling down and returns while scrolling up;
 - header icon buttons keep stable dimensions, color, and opacity and only change the
   cursor on hover;

@@ -106,8 +106,8 @@ Current status:
 - Album display order can now be reversed with one album-level setting; membership
   positions stay canonical and are not destructively renumbered.
 - Public viewing polish now includes stable header controls, image loading feedback,
-  equal M-grid rows, viewport-bounded L images, Safari-safe click zoom, and a
-  direction-aware auto-hiding header.
+  edge-to-edge justified M rows, viewport-bounded L images, point-aware zoom with
+  drag panning, and a direction-aware auto-hiding header.
 - Controlled album tags now have first public `/tags/[slug]` pages. Multi-tag filtering
   remains a later archive milestone.
 - The July 18 frontend refinement is live as Worker version
