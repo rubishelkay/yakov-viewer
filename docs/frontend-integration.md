@@ -38,14 +38,18 @@ The parent folder is about 1.2 GB because `dist` duplicates the media. Neither `
 
 Current viewing rules:
 
-- M mode uses a fixed responsive grid, so an incomplete final row keeps the same item
-  dimensions as every previous row;
+- M mode uses equal-height flex rows: landscape, portrait, and panorama frames keep
+  their natural proportions, while portrait frames become narrower instead of making
+  a row taller or leaving a large vertical gap;
 - L mode preserves the natural frame but caps landscape images to the visible browser
   height;
 - image surfaces show a compact spinner until the selected asset has decoded or failed;
-- the fullscreen viewer uses a reliable single click/tap to toggle zoom, including Safari;
+- the fullscreen viewer explicitly contains the complete frame inside the viewport,
+  including Safari; a reliable single click/tap then toggles the enlarged view;
 - the minimal header hides while scrolling down and returns while scrolling up;
-- header icon buttons keep stable dimensions and only change the cursor on hover.
+- header icon buttons keep stable dimensions, color, and opacity and only change the
+  cursor on hover;
+- the favicon uses the `JS` monogram.
 
 ## Integration Direction
 
@@ -102,7 +106,9 @@ The accepted visual style stays, but content comes from admin-managed Sets:
 
 The first integrated frontend still does not need public downloads or Logjamming
 controls. A compact first tag slice now exists: controlled tags in album subtitles link
-to `/tags/[slug]`, where published, non-hidden photos with that effective tag are shown.
+to `/tags/[slug]`, where matching published albums are shown with the canonical album
+card. An album matches through its inherited album tags or a direct tag on any public
+photo inside it.
 Search and multi-tag `AND` filtering remain later work.
 
 ## Real Content Import

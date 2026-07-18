@@ -93,21 +93,12 @@ export function getPublicTagBySlug(archive: LocalAdminArchive, slug: string) {
   return archive.tags.find((tag) => tag.slug === slug);
 }
 
-export function getPublicPhotosForTag(archive: LocalAdminArchive, tagId: string) {
-  const seen = new Set<string>();
-
-  return getPublicAlbums(archive).flatMap((album) => {
-    const albumHasTag = album.tagIds.includes(tagId);
-
-    return getPublicPhotosForAlbum(archive, album.id)
-      .map((photo, index) => ({ album, index, photo }))
-      .filter(({ photo }) => albumHasTag || photo.tagIds.includes(tagId))
-      .filter(({ photo }) => {
-        if (seen.has(photo.id)) return false;
-        seen.add(photo.id);
-        return true;
-      });
-  });
+export function getPublicAlbumsForTag(archive: LocalAdminArchive, tagId: string) {
+  return getPublicAlbums(archive).filter(
+    (album) =>
+      album.tagIds.includes(tagId) ||
+      getPublicPhotosForAlbum(archive, album.id).some((photo) => photo.tagIds.includes(tagId))
+  );
 }
 
 export function getAlbumSubtitleTags(archive: LocalAdminArchive, album: LocalArchiveAlbum) {

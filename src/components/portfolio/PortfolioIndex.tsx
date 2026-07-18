@@ -5,14 +5,13 @@ import { ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useAdminArchive } from "@/admin/admin-state";
+import { PortfolioAlbumCard } from "@/components/portfolio/PortfolioAlbumCard";
 import { PortfolioImage } from "@/components/portfolio/PortfolioImage";
-import { PortfolioTagLinks } from "@/components/portfolio/PortfolioTagLinks";
 import {
   getAlbumCover,
   getHomepageAlbums,
   getHeroAlbums,
   getPublicAlbums,
-  getPublicPhotosForAlbum,
   isFilmAlbum
 } from "@/lib/portfolio";
 
@@ -59,24 +58,14 @@ export function PortfolioIndex({ hero = false }: { hero?: boolean }) {
           </div>
         </div>
         <div className="portfolio-album-grid">
-          {shownAlbums.map((album) => {
-            const cover = getAlbumCover(archive, previewUrls, album);
-            const count = getPublicPhotosForAlbum(archive, album.id).length;
-
-            return (
-              <article className="portfolio-album-card" key={album.id}>
-                <Link aria-label={`Open ${album.title}`} href={`/albums/${album.slug}`}>
-                  <span className="portfolio-album-card__cover">
-                    {cover ? <PortfolioImage alt={`Cover of ${album.title}`} decoding="async" loading="lazy" src={cover} /> : null}
-                  </span>
-                </Link>
-                <span className="portfolio-album-card__meta">
-                  <Link href={`/albums/${album.slug}`}><strong>{album.title}</strong></Link>
-                  <small><PortfolioTagLinks album={album} archive={archive} count={count} /></small>
-                </span>
-              </article>
-            );
-          })}
+          {shownAlbums.map((album) => (
+            <PortfolioAlbumCard
+              album={album}
+              archive={archive}
+              key={album.id}
+              previewUrls={previewUrls}
+            />
+          ))}
         </div>
       </section>
     </main>
