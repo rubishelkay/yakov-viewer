@@ -207,6 +207,7 @@ export const uploadDerivativeSchema = z.object({
 export const uploadJobSchema = z.object({
   id: z.string().min(1),
   albumId: z.string().min(1),
+  photoId: z.string().min(1).optional(),
   fileName: z.string().min(1),
   status: uploadJobStatusSchema,
   progress: z.number().min(0).max(100),

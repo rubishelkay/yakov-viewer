@@ -68,6 +68,10 @@ pnpm exec opennextjs-cloudflare build
 pnpm exec opennextjs-cloudflare preview
 ```
 
+Before the first local Worker preview, create ignored `.dev.vars` from the safe
+`.dev.vars.example` template. `ADMIN_LOCAL_BYPASS` is strictly a local preview switch;
+do not add it to Worker production variables.
+
 The external admin remains disabled with `ADMIN_ACCESS_ENABLED=false` until Cloudflare
 Access is configured and tested.
 
@@ -125,7 +129,8 @@ Local and production verification completed on 2026-07-18:
 - `0001_archive.sql` applied successfully with 23 commands;
 - `archive_albums`, `archive_photos`, `album_photos`, and `archive_assets` exist;
 - `PRAGMA foreign_key_check` returned no violations.
-- a JPEG was uploaded through the local OpenNext Worker into private R2;
+- the optional source-retention path was verified by uploading a JPEG through the local
+  OpenNext Worker into private R2;
 - the matching Photo, AlbumPhoto, Asset, and UploadJob rows were written to D1;
 - the protected asset endpoint returned byte-identical JPEG data;
 - the same archive route works in both `opennextjs-cloudflare preview` and `pnpm dev`.
@@ -136,7 +141,16 @@ Local and production verification completed on 2026-07-18:
 
 ## Admin Access
 
-Protect `/admin/*` with Cloudflare Access for the owner email:
+Protect both the parent paths and their descendants with Cloudflare Access:
+
+```txt
+yakov.shmol.cc/admin
+yakov.shmol.cc/admin/*
+yakov.shmol.cc/api/admin
+yakov.shmol.cc/api/admin/*
+```
+
+Use Google as the identity provider and allow exactly this owner email:
 
 ```txt
 Jacobjshmol@gmail.com
@@ -144,13 +158,37 @@ Jacobjshmol@gmail.com
 
 Application-level login is not required for the first upload milestone.
 
+The Google OAuth client secret belongs in Cloudflare Zero Trust / Google Cloud only. It
+must never be entered into source files, Wrangler variables, `.env.example`, or GitHub.
+
 The application API verifies Cloudflare Access on non-local hosts. The expected
 email is configured as the non-secret `ADMIN_EMAIL` Worker variable; requests without a
 matching Access identity fail closed.
 
 Until the Access application exists, `ADMIN_ACCESS_ENABLED=false` makes external
 `/admin` return 404 and `/api/admin/*` return 503. Localhost remains available for
-development.
+development. Local OpenNext Worker preview additionally reads
+`ADMIN_LOCAL_BYPASS=true` from ignored `.dev.vars`; that flag must never be set in the
+production Worker.
+
+`workers_dev` and Worker version preview URLs are disabled in production configuration.
+This prevents an alternate hostname from reaching admin routes outside the Access
+application. Local development remains available only through the explicit ignored
+`ADMIN_LOCAL_BYPASS=true` switch.
+
+## Free-plan envelope
+
+The initial production configuration targets Cloudflare Free:
+
+- R2 Standard: 10 GB-month, 1 million Class A operations and 10 million Class B
+  operations per month included;
+- Workers Free: 100,000 requests per day;
+- D1 Free: 5 million rows read and 100,000 rows written per day;
+- Cloudflare Access: owner-only use is comfortably below the free plan's 50-user limit.
+
+The uploader stores `thumb + display` by default. A private `sourceJpeg` is retained only
+when the owner explicitly enables it for that batch. Do not use R2 Infrequent Access for
+this first version because its storage has no free tier.
 
 ## Remote Change Policy
 
@@ -183,17 +221,20 @@ Repository-safe files include binding names, schema/migrations, Worker configura
 
 ## Current Audit Status
 
-As of 2026-07-18:
+As of 2026-07-19:
 
 - Next.js 16.2.6 builds successfully with `@opennextjs/cloudflare` 1.20.1;
 - the generated Worker serves `/`, real album routes, and `/api/health` on
   `yakov-viewer.jacobjshmol.workers.dev`;
 - local D1 and both local R2 bindings are visible to the Worker;
-- the direct multipart JPEG path has passed a local D1/R2 round-trip test;
+- the ordered multipart JPEG path has passed a local D1/R2 round-trip test with real
+  browser-generated `thumb`/`display`, optional unchanged private source, and
+  idempotent retry;
 - the R2 custom domain `assets.yakov.shmol.cc` is active with TLS 1.2 minimum;
 - clean-browser production QA loaded the 9 real album covers and all 36 photos in the
   checked album with zero failed images or console errors;
 - external `/admin` is hidden and the admin API is disabled until Access is ready;
+- production migration `0003_upload_job_photo.sql` has not yet been applied;
 - `yakov.shmol.cc/*` is live on the OpenNext Worker through a zone Worker Route;
 - the old Pages custom-domain attachment is removed, but the Pages project remains
   available for rollback;

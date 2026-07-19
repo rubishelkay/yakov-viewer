@@ -240,6 +240,7 @@ export async function readD1Archive(db: Database): Promise<AdminArchive> {
     uploadJobs: rows<{
       id: string;
       album_id: string;
+      photo_id: string | null;
       file_name: string;
       status: AdminArchive["uploadJobs"][number]["status"];
       progress: number;
@@ -248,11 +249,18 @@ export async function readD1Archive(db: Database): Promise<AdminArchive> {
     }>(uploadResult).map((row) => ({
       id: row.id,
       albumId: row.album_id,
+      photoId: optional(row.photo_id),
       fileName: row.file_name,
       status: row.status,
       progress: row.progress,
       bytes: row.bytes,
-      derivatives: [{ version: "sourceJpeg", status: "done", progress: 100 }],
+      derivatives: row.photo_id
+        ? (photoAssets.get(row.photo_id) ?? []).map((asset) => ({
+            version: asset.version,
+            status: "done" as const,
+            progress: 100
+          }))
+        : [{ version: "sourceJpeg" as const, status: "done" as const, progress: 100 }],
       createdAt: row.created_at
     }))
   });
@@ -317,9 +325,35 @@ export async function createD1Album(
 }
 
 export async function createD1PhotoUpload(
-  env: Pick<CloudflareEnv, "DB" | "PRIVATE_ASSETS">,
-  input: { albumId: string; file: File; height: number; title?: string; width: number }
+  env: Pick<
+    CloudflareEnv,
+    "DB" | "PRIVATE_ASSETS" | "PUBLIC_ASSETS" | "NEXT_PUBLIC_ASSET_BASE_URL"
+  >,
+  input: {
+    albumId: string;
+    clientUploadId: string;
+    display: { file: File; height: number; width: number };
+    height: number;
+    source?: File;
+    sourceBytes: number;
+    sourceFileName: string;
+    thumb: { file: File; height: number; width: number };
+    title?: string;
+    width: number;
+  }
 ) {
+  const photoId = `photo-${input.clientUploadId}`;
+  const existingMembership = await env.DB
+    .prepare("SELECT album_id FROM album_photos WHERE photo_id = ?")
+    .bind(photoId)
+    .first<{ album_id: string }>();
+  if (existingMembership) {
+    if (existingMembership.album_id !== input.albumId) {
+      throw new ArchiveWriteError("upload_id_conflict", "This upload ID already belongs to another album.", 409);
+    }
+    return readExistingPhotoUpload(env.DB, photoId, input.clientUploadId);
+  }
+
   const album = await env.DB
     .prepare("SELECT id FROM archive_albums WHERE id = ? AND status NOT IN ('trash', 'deleted')")
     .bind(input.albumId)
@@ -327,25 +361,99 @@ export async function createD1PhotoUpload(
   if (!album) throw new ArchiveWriteError("album_not_found", "Album was not found.", 404);
 
   const timestamp = new Date().toISOString();
-  const baseTitle = input.title?.trim() || stripExtension(input.file.name) || "Untitled photo";
+  const baseTitle = input.title?.trim() || stripExtension(input.sourceFileName) || "Untitled photo";
   const slug = await uniqueSlug(env.DB, "archive_photos", baseTitle);
-  const photoId = `photo-${slug}-${crypto.randomUUID().slice(0, 8)}`;
-  const assetId = `asset-${photoId.replace(/^photo-/, "")}-sourceJpeg`;
-  const uploadId = `upload-${crypto.randomUUID()}`;
+  const assetStem = `asset-${input.clientUploadId}`;
+  const sourceAssetId = `${assetStem}-sourceJpeg`;
+  const thumbAssetId = `${assetStem}-thumb`;
+  const displayAssetId = `${assetStem}-display`;
+  const uploadId = `upload-${input.clientUploadId}`;
   const positionRow = await env.DB
     .prepare("SELECT COALESCE(MAX(position), 0) + 1 AS next_position FROM album_photos WHERE album_id = ?")
     .bind(album.id)
     .first<{ next_position: number }>();
   const position = positionRow?.next_position ?? 1;
-  const objectKey = `source-jpeg/${album.id}/${photoId}/${safeFileName(input.file.name)}`;
-
-  await env.PRIVATE_ASSETS.put(objectKey, input.file, {
-    httpMetadata: { contentType: "image/jpeg" },
-    customMetadata: { albumId: album.id, originalFileName: input.file.name, photoId }
-  });
+  const sourceKey = `source-jpeg/${album.id}/${photoId}/${safeFileName(input.sourceFileName)}`;
+  const thumbKey = `thumb/${album.id}/${photoId}.jpg`;
+  const displayKey = `display/${album.id}/${photoId}.jpg`;
+  const publicBaseUrl = env.NEXT_PUBLIC_ASSET_BASE_URL.replace(/\/$/, "");
+  const sourceAsset: ArchiveAsset | undefined = input.source ? {
+    id: sourceAssetId,
+    photoId,
+    version: "sourceJpeg",
+    access: "private",
+    bucket: "yakov-private-assets",
+    key: sourceKey,
+    width: input.width,
+    height: input.height,
+    bytes: input.source.size,
+    mimeType: "image/jpeg",
+    colorProfile: "preserve",
+    createdAt: timestamp
+  } : undefined;
+  const thumbAsset: ArchiveAsset = {
+    id: thumbAssetId,
+    photoId,
+    version: "thumb",
+    access: "public",
+    bucket: "yakov-public-assets",
+    key: thumbKey,
+    publicUrl: `${publicBaseUrl}/${thumbKey}`,
+    width: input.thumb.width,
+    height: input.thumb.height,
+    bytes: input.thumb.file.size,
+    mimeType: "image/jpeg",
+    colorProfile: "srgb",
+    createdAt: timestamp
+  };
+  const displayAsset: ArchiveAsset = {
+    id: displayAssetId,
+    photoId,
+    version: "display",
+    access: "public",
+    bucket: "yakov-public-assets",
+    key: displayKey,
+    publicUrl: `${publicBaseUrl}/${displayKey}`,
+    width: input.display.width,
+    height: input.display.height,
+    bytes: input.display.file.size,
+    mimeType: "image/jpeg",
+    colorProfile: "srgb",
+    createdAt: timestamp
+  };
+  const assets: ArchiveAsset[] = [thumbAsset, displayAsset];
+  if (sourceAsset) assets.push(sourceAsset);
+  const storedObjects: Array<{ bucket: CloudflareEnv["PUBLIC_ASSETS"]; key: string }> = [];
 
   try {
-    await env.DB.batch([
+    if (input.source) {
+      await env.PRIVATE_ASSETS.put(sourceKey, input.source, {
+        httpMetadata: { contentType: "image/jpeg" },
+        customMetadata: { albumId: album.id, originalFileName: input.sourceFileName, photoId }
+      });
+      storedObjects.push({ bucket: env.PRIVATE_ASSETS, key: sourceKey });
+    }
+    await env.PUBLIC_ASSETS.put(thumbKey, input.thumb.file, {
+      httpMetadata: { cacheControl: "public, max-age=31536000, immutable", contentType: "image/jpeg" },
+      customMetadata: { albumId: album.id, photoId, version: "thumb" }
+    });
+    storedObjects.push({ bucket: env.PUBLIC_ASSETS, key: thumbKey });
+    await env.PUBLIC_ASSETS.put(displayKey, input.display.file, {
+      httpMetadata: { cacheControl: "public, max-age=31536000, immutable", contentType: "image/jpeg" },
+      customMetadata: { albumId: album.id, photoId, version: "display" }
+    });
+    storedObjects.push({ bucket: env.PUBLIC_ASSETS, key: displayKey });
+  } catch (error) {
+    try {
+      return await readExistingPhotoUpload(env.DB, photoId, input.clientUploadId);
+    } catch {
+      await deleteStoredObjects(storedObjects);
+      throw error;
+    }
+  }
+
+  try {
+    const statements = [
       env.DB.prepare(`
         INSERT INTO archive_photos (
           id, slug, title, description, status, frame_number, width, height,
@@ -365,22 +473,48 @@ export async function createD1PhotoUpload(
       env.DB
         .prepare("INSERT INTO album_photos (album_id, photo_id, position, created_at) VALUES (?, ?, ?, ?)")
         .bind(album.id, photoId, position, timestamp),
-      env.DB.prepare(`
-        INSERT INTO archive_assets (
-          id, photo_id, version, access, bucket, object_key, width, height,
-          bytes, mime_type, color_profile, created_at
-        ) VALUES (?, ?, 'sourceJpeg', 'private', 'yakov-private-assets', ?, ?, ?, ?, 'image/jpeg', 'preserve', ?)
-      `).bind(assetId, photoId, objectKey, input.width, input.height, input.file.size, timestamp),
+      ...assets.map((asset) => env.DB.prepare(`
+          INSERT INTO archive_assets (
+            id, photo_id, version, access, bucket, object_key, public_url, width, height,
+            bytes, mime_type, color_profile, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(
+          asset.id,
+          photoId,
+          asset.version,
+          asset.access,
+          asset.bucket,
+          asset.key,
+          asset.publicUrl ?? null,
+          asset.width ?? null,
+          asset.height ?? null,
+          asset.bytes,
+          asset.mimeType,
+          asset.colorProfile,
+          timestamp
+        )),
       env.DB.prepare(`
         INSERT INTO upload_jobs (
-          id, album_id, file_name, status, progress, bytes, created_at, updated_at
-        ) VALUES (?, ?, ?, 'review', 100, ?, ?, ?)
-      `).bind(uploadId, album.id, input.file.name, input.file.size, timestamp, timestamp),
-      env.DB.prepare("UPDATE archive_albums SET updated_at = ? WHERE id = ?").bind(timestamp, album.id)
-    ]);
+          id, album_id, photo_id, file_name, status, progress, bytes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, 'review', 100, ?, ?, ?)
+      `).bind(uploadId, album.id, photoId, input.sourceFileName, input.sourceBytes, timestamp, timestamp),
+      env.DB.prepare(`
+        UPDATE archive_albums
+        SET cover_landscape_asset_id = COALESCE(cover_landscape_asset_id, ?),
+            cover_portrait_asset_id = COALESCE(cover_portrait_asset_id, ?),
+            cover_square_asset_id = COALESCE(cover_square_asset_id, ?),
+            updated_at = ?
+        WHERE id = ?
+      `).bind(displayAssetId, displayAssetId, thumbAssetId, timestamp, album.id)
+    ];
+    await env.DB.batch(statements);
   } catch (error) {
-    await env.PRIVATE_ASSETS.delete(objectKey);
-    throw error;
+    try {
+      return await readExistingPhotoUpload(env.DB, photoId, input.clientUploadId);
+    } catch {
+      await deleteStoredObjects(storedObjects);
+      throw error;
+    }
   }
 
   const photo: ArchivePhoto = {
@@ -391,44 +525,71 @@ export async function createD1PhotoUpload(
     status: defaultAdminSettings.defaultPhotoStatus,
     frameNumber: position,
     tagIds: [],
-    assetIds: [assetId],
+    assetIds: assets.map((asset) => asset.id),
     width: input.width,
     height: input.height,
     dominantColor: "#111111",
     createdAt: timestamp,
     updatedAt: timestamp
   };
-  const asset: ArchiveAsset = {
-    id: assetId,
-    photoId,
-    version: "sourceJpeg",
-    access: "private",
-    bucket: "yakov-private-assets",
-    key: objectKey,
-    width: input.width,
-    height: input.height,
-    bytes: input.file.size,
-    mimeType: "image/jpeg",
-    colorProfile: "preserve",
-    createdAt: timestamp
-  };
 
   return {
     photo,
     albumPhoto: { albumId: album.id, photoId, position, createdAt: timestamp },
-    asset,
+    asset: sourceAsset ?? displayAsset,
+    assets,
     uploadJob: {
       id: uploadId,
       albumId: album.id,
-      fileName: input.file.name,
+      photoId,
+      fileName: input.sourceFileName,
       status: "review" as const,
       progress: 100,
-      bytes: input.file.size,
-      derivatives: [{ version: "sourceJpeg" as const, status: "done" as const, progress: 100 }],
+      bytes: input.sourceBytes,
+      derivatives: assets.map((asset) => ({
+        version: asset.version,
+        status: "done" as const,
+        progress: 100
+      })),
       createdAt: timestamp
     },
-    adminPreviewUrl: `/api/admin/assets/${assetId}`
+    adminPreviewUrl: `/api/admin/assets/${displayAssetId}`
   };
+}
+
+async function readExistingPhotoUpload(db: Database, photoId: string, clientUploadId: string) {
+  const archive = await readD1Archive(db);
+  const photo = archive.photos.find((item) => item.id === photoId);
+  const albumPhoto = archive.albumPhotos.find((item) => item.photoId === photoId);
+  const assets = archive.assets.filter((item) => item.photoId === photoId);
+  const uploadJob = archive.uploadJobs.find((item) => item.id === `upload-${clientUploadId}`);
+  const sourceAsset = assets.find((asset) => asset.version === "sourceJpeg");
+  const previewAsset = assets.find((asset) => asset.version === "display") ?? sourceAsset;
+  if (!photo || !albumPhoto || !previewAsset || !uploadJob) {
+    throw new ArchiveWriteError("upload_incomplete", "The previous upload is incomplete.", 409);
+  }
+
+  return {
+    photo,
+    albumPhoto,
+    asset: sourceAsset ?? previewAsset,
+    assets,
+    uploadJob: {
+      ...uploadJob,
+      derivatives: assets.map((asset) => ({
+        version: asset.version,
+        status: "done" as const,
+        progress: 100
+      }))
+    },
+    adminPreviewUrl: `/api/admin/assets/${previewAsset.id}`
+  };
+}
+
+async function deleteStoredObjects(
+  objects: Array<{ bucket: CloudflareEnv["PUBLIC_ASSETS"]; key: string }>
+) {
+  await Promise.allSettled(objects.map(({ bucket, key }) => bucket.delete(key)));
 }
 
 export async function findD1Asset(db: Database, assetId: string) {

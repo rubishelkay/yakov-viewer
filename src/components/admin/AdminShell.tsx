@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   Archive,
   CircleX,
+  CloudUpload,
   Database,
   Gauge,
   ImagePlus,
@@ -16,6 +17,7 @@ import {
 
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: Gauge },
+  { href: "/admin/ingest", label: "Cloud upload", icon: CloudUpload },
   { href: "/admin/sets", label: "Sets", icon: Layers3 },
   { href: "/admin/albums", label: "Albums", icon: ImagePlus },
   { href: "/admin/photos", label: "Photos", icon: Images },
@@ -63,7 +65,7 @@ export function AdminShell({ children }: Readonly<{ children: React.ReactNode }>
 
         <div className="admin-rail__status">
           <Database aria-hidden />
-          <span>Cloudflare-ready</span>
+          <span>Local editors + Cloud ingest</span>
         </div>
       </aside>
 

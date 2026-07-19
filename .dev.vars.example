@@ -1,0 +1,2 @@
+# Local OpenNext/workerd preview only. Never configure this variable in production.
+ADMIN_LOCAL_BYPASS=true

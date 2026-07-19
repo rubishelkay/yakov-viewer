@@ -94,11 +94,12 @@ Avoid using `r2.dev` for production delivery.
 1. Admin creates or opens an album.
 2. Admin uploads a batch of JPEG files.
 3. API creates photo records in draft/review status.
-4. Uploaded source JPEG is stored as private/admin asset.
-5. Processing job creates thumb, display, expanded public preview, optional download JPEG, and cover-ready derivatives.
-6. Metadata is extracted and sanitized.
-7. Admin reviews ordering, visibility, metadata, and covers.
-8. Admin publishes the album.
+4. Browser/processing creates and stores public thumb and display assets.
+5. The uploaded source JPEG is stored as a private/admin asset only when retention is enabled.
+6. Later processing can add expanded preview, optional download JPEG, and cover-ready derivatives.
+7. Metadata is extracted and sanitized.
+8. Admin reviews ordering, visibility, metadata, and covers.
+9. Admin publishes the album.
 ```
 
 The first implementation can process only JPEG uploads. RAW/RAF/TIFF support should be modeled but not required for the first working admin.

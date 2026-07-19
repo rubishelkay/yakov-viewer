@@ -1,6 +1,6 @@
 # Cloudflare Costs And Limits
 
-This file records the current cost assumptions checked against Cloudflare docs on 2026-05-12.
+This file records the current cost assumptions checked against Cloudflare docs on 2026-07-19.
 
 ## R2 Storage
 
@@ -32,6 +32,19 @@ Egress: free
 Infrequent Access is cheaper for storage but charges retrieval and has a 30-day minimum. For this project, Standard storage is the safer default at first.
 
 ## Rough Storage Estimates
+
+The active free-plan policy is different from the older full-archive estimate below:
+
+```txt
+default per photo: thumb + display, usually about 0.5-1.2 MB total
+optional per photo: retained private source JPEG, commonly 3-5 MB
+3,600 default photos: roughly 2-4.5 GB plus cache/overhead
+3,600 retained sources alone: roughly 11-18 GB
+```
+
+Therefore source retention is off by default and full originals stay on owner-managed
+external storage. The larger examples remain useful only when deciding whether to move
+to paid storage later.
 
 Assume per photo:
 
@@ -82,28 +95,29 @@ included: 10M requests/month
 additional: $0.30/million requests
 ```
 
-Workers Free includes limited requests, but the paid plan is the more realistic baseline once the admin, uploads, D1, R2, and image processing are active.
+Workers Free currently includes 100,000 requests per day and is the active target for
+the owner-only admin and early portfolio traffic. A paid plan is considered only after
+measured usage approaches that limit.
 
 ## D1
 
-Current D1 paid inclusions are generous for this project:
+Current D1 Free limits are sufficient for the first archive:
 
 ```txt
-25B rows read/month included
-50M rows written/month included
-5 GB storage included
-extra storage: $0.75 / GB-month
+5M rows read/day
+100K rows written/day
+5 GB total account storage
 ```
 
 Photo metadata will be tiny compared with image files, so D1 storage is not the cost driver.
 
 ## Cloudflare Access
 
-Cloudflare Access has a free tier for teams under 50 users. That should be enough for the first owner-only admin.
+Cloudflare Access has a free plan for teams under 50 users. The admin allows one Google
+identity only, so no paid Access plan is needed.
 
 ## Cloudflare Images
 
 Cloudflare Images transformations have a free monthly allowance, then paid unique transformations. Because this archive may contain thousands of images and many sizes, the project should prefer generating and storing the main derivatives in R2 rather than relying only on endless on-the-fly transformations.
 
 Cloudflare image transformations can still be useful, but pre-generated `thumb`, `display`, `expanded`, and `downloadJpeg` give more control over cost and quality.
-

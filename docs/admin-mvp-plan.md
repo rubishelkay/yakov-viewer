@@ -215,11 +215,12 @@ custom disabled
 1. Create album.
 2. Select/drag-and-drop JPEG files first; Google Drive import can appear as a planned/secondary path.
 3. Preserve selected/upload order.
-4. Upload source JPEG to private R2.
-5. Create D1 photo + asset records.
-6. Generate all configured versions immediately: thumb, display, expanded, downloadJpeg, and cover-ready derivatives.
-7. Show photos in review state.
-8. Owner edits, hides, tags, reorders, and publishes.
+4. Upload generated `thumb`/`display` to public R2.
+5. Optionally retain the selected source JPEG in private R2.
+6. Create D1 photo + asset records for versions that actually exist.
+7. Generate optional expanded/download/cover versions only when enabled and useful.
+8. Show photos in review state.
+9. Owner edits, hides, tags, reorders, and publishes.
 ```
 
 First version: JPEG only.

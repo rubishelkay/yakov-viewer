@@ -55,10 +55,13 @@ Confirmed working targets:
 - `display`: public viewing image, target around 1 MB;
 - `expanded`: public high-quality viewing image, target around 2-3 MB when the source contains enough data;
 - `downloadJpeg`: optional future public download/open file, allowed up to about 20 MB;
-- `sourceJpeg`: uploaded JPEG, commonly around 2000 px and 3-5 MB, private/admin by default;
+- `sourceJpeg`: optional uploaded JPEG, commonly around 2000 px and 3-5 MB, private/admin only;
 - `master`: optional private RAW/RAF/TIFF/full panorama, stored only for selected photos.
 
-The uploaded `sourceJpeg` should be stored as uploaded unless the admin explicitly requests normalization. It is the main high-quality archive asset for the admin, not something the public site should casually load.
+When the admin enables source retention, `sourceJpeg` is stored as uploaded unless
+normalization is explicitly requested. Retention is off by default: the primary original
+archive remains external, while R2 holds compact web derivatives and only selected
+private sources.
 
 The master file is private in the current product phase. Later, selected master downloads can be added for approved users.
 
@@ -66,15 +69,25 @@ The first integrated public frontend does not add a download control. Public dow
 
 ## First Upload Slice
 
-The first tested Cloudflare-backed uploader stores exactly one asset version:
+The tested Cloudflare-backed uploader always stores two web asset versions and can store
+one optional private version:
 
 ```txt
-sourceJpeg -> private R2, preserved byte-for-byte
+thumb      -> generated in browser, public R2, target <= 300 KB
+display    -> generated in browser, public R2, target about 1 MB
+sourceJpeg -> optional private R2, preserved byte-for-byte
 ```
 
-It records the canonical photo, album membership, private asset, and upload job in D1.
-It does not create placeholder `thumb`, `display`, or `expanded` rows. Those versions
-will be added only when the derivative processor writes real files to public R2.
+Browser canvas output gives the first web derivatives predictable sRGB-oriented JPEG
+delivery and strips source EXIF from those public files. When selected, the unchanged
+private source remains available for future reprocessing. D1 records the canonical
+photo, ordered album membership, two or three assets, and upload job only after the R2
+writes succeed.
+
+To remain within the 10 GB-month R2 Standard free tier, the upload UI defaults to
+`thumb + display` only. At 3,600 photos, retaining every 3-5 MB source would require
+roughly 11-18 GB before derivatives. Source retention is therefore an explicit per-batch
+choice for exceptional files.
 
 The initial Worker endpoint accepts JPEG files up to 20 MiB. That limit covers the
 current expected 3-5 MB uploads and can be revisited before large source JPEG or master
@@ -123,9 +136,9 @@ Target processing flow:
 
 ```txt
 uploaded large JPEG
-  -> store sourceJpeg privately
   -> generate thumb
   -> generate display
+  -> optionally store sourceJpeg privately
   -> generate expanded public preview only when useful
   -> generate downloadJpeg if configured
   -> generate cover crops when selected
@@ -143,7 +156,7 @@ Google Drive remains an external originals archive for now. Automatic Drive sync
 - Do not load originals in grids.
 - Do not generate unbounded widths.
 - Do not publish GPS EXIF by default.
-- Uploaded source JPEG download/open access is private by default.
+- Retained source JPEG download/open access is private and owner-only.
 - Larger public download/open access can be enabled globally, at album level, or at photo level, but should use optimized derivatives in the first version.
 - Master downloads are private and disabled in the current phase.
 - Future ingest scripts should strip sensitive EXIF, compute dimensions, generate blur/dominant color data, and upload to R2.

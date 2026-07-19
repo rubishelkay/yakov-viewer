@@ -1,14 +1,17 @@
 import "server-only";
 
-const localHosts = new Set(["127.0.0.1", "localhost", "::1"]);
+type AdminAccessEnv = Pick<CloudflareEnv, "ADMIN_ACCESS_ENABLED" | "ADMIN_EMAIL"> & {
+  ADMIN_LOCAL_BYPASS?: string;
+};
 
 export function isAdminAccessEnabled(value: string | undefined) {
   return value === "true";
 }
 
-export function requireAdminAccess(request: Request, env: CloudflareEnv) {
-  const hostname = new URL(request.url).hostname;
-  if (localHosts.has(hostname)) return null;
+export function requireAdminAccess(request: Request, env: AdminAccessEnv) {
+  if (isAdminLocalBypassEnabled(env.ADMIN_LOCAL_BYPASS)) {
+    return null;
+  }
 
   if (!isAdminAccessEnabled(env.ADMIN_ACCESS_ENABLED)) {
     return Response.json(
@@ -40,10 +43,6 @@ export function requireAdminAccess(request: Request, env: CloudflareEnv) {
   return null;
 }
 
-export function isLocalAdminHost(host: string | null) {
-  if (!host) return false;
-  const hostname = host.startsWith("[")
-    ? host.slice(1, host.indexOf("]"))
-    : host.split(":")[0];
-  return localHosts.has(hostname.toLowerCase());
+export function isAdminLocalBypassEnabled(value: string | undefined) {
+  return value === "true";
 }

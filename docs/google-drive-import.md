@@ -40,7 +40,8 @@ Target version:
 - preserve Drive folder order where possible;
 - otherwise sort by filename;
 - create one album per imported folder by default;
-- source JPEG goes to private R2;
+- source JPEG stays in Drive by default and is copied to private R2 only when retention
+  is explicitly enabled;
 - derivatives go to public R2;
 - metadata goes to D1;
 - album lands in draft/review.

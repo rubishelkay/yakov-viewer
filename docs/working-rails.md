@@ -60,6 +60,7 @@ Important decisions should be written into docs:
 - `docs/project-decisions-ru.md` for product decisions in Russian;
 - `docs/admin-architecture.md` for admin/storage architecture;
 - `docs/admin-api-contract.md` for API shape;
+- `docs/admin-upload-roadmap-ru.md` for the current admin status and production-upload path;
 - `docs/image-pipeline.md` for photo versions and processing;
 - `docs/cloudflare-setup.md` for Cloudflare setup;
 - this file for collaboration/workflow rules.
@@ -76,15 +77,19 @@ Current status:
 
 - Next.js public routes remain prerender-first where practical.
 - Public/admin route split exists.
-- Admin is local-first.
+- Existing editor screens are local-first; a separate Cloud-backed ingest screen now
+  exists at `/admin/ingest` so browser and Cloudflare state are never silently mixed.
 - Metadata persists in `localStorage`.
 - JPEG previews persist in IndexedDB.
 - Unused Cloudflare Pages Function stubs have been removed.
 - D1 migration draft exists.
-- The first local Cloudflare-backed slice is working: D1 archive reads, album creation,
-  private R2 JPEG upload, D1 metadata writes, and authenticated asset reads.
-- The visible admin still uses the local browser repository until all essential edit
-  mutations have Cloudflare API equivalents; this avoids a mixed persistence model.
+- The first local Cloudflare-backed ingest slice is working: D1 archive reads, draft
+  album creation, browser-generated `thumb`/`display`, optional unchanged private
+  `sourceJpeg`, D1 metadata writes, authenticated asset reads, ordered batch upload,
+  and idempotent retry.
+- The visible editor screens still use the local browser repository until all essential
+  edit mutations have Cloudflare API equivalents. `Cloud upload` is explicitly isolated
+  and uses only D1/R2.
 - A finished external Vite frontend has been accepted as the public visual contract.
 - It contains 9 real albums and 312 real photos that will become the first R2/D1 import.
 - Its homepage, album index, S/M/L album views, and viewer are now integrated locally into the Next.js public routes.
@@ -102,7 +107,9 @@ Current status:
 - The technical OpenNext Worker is live and uses a dedicated R2 incremental cache.
 - `assets.yakov.shmol.cc` is active, and `yakov.shmol.cc/*` now routes to the verified
   OpenNext Worker. The old Pages project remains detached but available for rollback.
-- External admin access stays disabled until Cloudflare Access is configured.
+- External admin access stays disabled until Cloudflare Access is configured. Production
+  migration `0003_upload_job_photo.sql` and a new deploy are still required before the
+  first real remote upload.
 - Album display order can now be reversed with one album-level setting; membership
   positions stay canonical and are not destructively renumbered.
 - Public viewing polish now includes stable header controls, image loading feedback,
@@ -242,7 +249,8 @@ Minimum flow:
 ```txt
 create album
   -> send JPEG to the protected Worker endpoint
-  -> Worker writes source JPEG to private R2
+  -> Worker writes thumb/display to public R2
+  -> Worker optionally writes selected source JPEGs to private R2
   -> Worker writes Photo, AlbumPhoto, Asset, and UploadJob rows to D1
   -> admin reloads the archive through the Cloudflare API adapter
 ```
@@ -250,24 +258,26 @@ create album
 The first implementation intentionally uses a direct multipart request through the
 protected Worker. This is simpler to validate end to end. Presigned/direct-to-R2
 uploads can replace it later if file sizes or concurrent uploads require that change.
-Do not create fake derivative records: until processing exists, only `sourceJpeg` is
-recorded.
+The current ingest creates real `thumb` and `display` JPEGs in the browser. It preserves
+the unchanged `sourceJpeg` only when the owner enables retention. It never creates
+placeholder derivative records.
 
 Immediate implementation order:
 
 1. Completed locally: typed D1 queries and `GET /api/admin/archive`.
 2. Completed locally: album creation against D1.
-3. Completed locally: JPEG upload to private R2 with transactional D1 writes and
-   compensating R2 deletion if the database write fails.
-4. Completed locally: typed client boundary for archive reads, album creation, JPEG
-   upload, and private asset reads.
-5. Next: add the remaining album/photo/set/tag/settings/bin mutations, then switch the
+3. Completed locally: ordered batch JPEG upload with real `thumb`/`display` in public
+   R2, optional unchanged `sourceJpeg` in private R2, transactional D1 writes,
+   compensating R2 deletion, and idempotent retry.
+4. Completed locally: separate D1/R2-backed `Cloud upload` workspace and typed client
+   boundary for archive reads, album creation, JPEG upload, and protected asset reads.
+5. Next: configure Access, apply production migration 0003, deploy, and run a small
+   remote smoke upload.
+6. Then: add the remaining album/photo/set/tag/settings/bin mutations and switch the
    whole admin repository as one coherent unit.
-6. Completed: production resources, migration, first real album/media import, technical
+7. Completed: production resources, migrations 0001-0002, first real album/media import, technical
    Worker deployment, and asset-domain verification.
-7. Completed: switch the public hostname to the verified Worker Route.
-8. Next: configure Access, finish mutation parity, and move the visible admin to the
-   Cloudflare repository as one coherent unit.
+8. Completed: switch the public hostname to the verified Worker Route.
 
 Cloudflare setup approach:
 

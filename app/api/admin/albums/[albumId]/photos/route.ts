@@ -7,6 +7,9 @@ import { ArchiveWriteError, createD1PhotoUpload } from "@/server/cloudflare/arch
 export const dynamic = "force-dynamic";
 
 const maxJpegBytes = 20 * 1024 * 1024;
+const maxThumbBytes = 512 * 1024;
+const maxDisplayBytes = 2 * 1024 * 1024;
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function POST(
   request: Request,
@@ -20,25 +23,58 @@ export async function POST(
     const { albumId } = await context.params;
     const form = await request.formData();
     const file = form.get("file");
+    const thumb = form.get("thumb");
+    const display = form.get("display");
+    const retainSource = form.get("retainSource") === "true";
+    const sourceFileName = optionalText(form.get("sourceFileName"));
+    const sourceBytes = positiveInteger(form.get("sourceBytes"));
     const width = positiveInteger(form.get("width"));
     const height = positiveInteger(form.get("height"));
+    const thumbWidth = positiveInteger(form.get("thumbWidth"));
+    const thumbHeight = positiveInteger(form.get("thumbHeight"));
+    const displayWidth = positiveInteger(form.get("displayWidth"));
+    const displayHeight = positiveInteger(form.get("displayHeight"));
+    const clientUploadId = optionalText(form.get("clientUploadId"));
     const title = optionalText(form.get("title"));
 
-    if (!(file instanceof File)) {
-      return apiError("missing_file", "A JPEG file is required.", 400);
+    if (!sourceFileName || !sourceBytes || sourceBytes > maxJpegBytes) {
+      return apiError("invalid_source_metadata", "Source JPEG metadata must be between 1 byte and 20 MiB.", 400);
     }
-    if (file.type !== "image/jpeg" || !(await hasJpegSignature(file))) {
+    if (retainSource && !(file instanceof File)) {
+      return apiError("missing_file", "The source JPEG is required when private retention is enabled.", 400);
+    }
+    if (!(thumb instanceof File) || !(display instanceof File)) {
+      return apiError("missing_derivatives", "Thumb and display JPEG files are required.", 400);
+    }
+    if (!clientUploadId || !uuidPattern.test(clientUploadId)) {
+      return apiError("invalid_upload_id", "A valid client upload ID is required.", 400);
+    }
+    if ((file instanceof File && !(await isJpeg(file))) || !(await isJpeg(thumb)) || !(await isJpeg(display))) {
       return apiError("unsupported_file", "The first upload milestone accepts JPEG files only.", 415);
     }
-    if (!file.size || file.size > maxJpegBytes) {
+    if (file instanceof File && (!file.size || file.size > maxJpegBytes || file.size !== sourceBytes)) {
       return apiError("invalid_file_size", "JPEG size must be between 1 byte and 20 MiB.", 413);
     }
-    if (!width || !height) {
-      return apiError("invalid_dimensions", "Positive JPEG width and height are required.", 400);
+    if (!thumb.size || thumb.size > maxThumbBytes || !display.size || display.size > maxDisplayBytes) {
+      return apiError("invalid_derivative_size", "Thumb must be at most 512 KiB and display at most 2 MiB.", 413);
+    }
+    if (!width || !height || !thumbWidth || !thumbHeight || !displayWidth || !displayHeight) {
+      return apiError("invalid_dimensions", "Positive source and derivative dimensions are required.", 400);
     }
 
     return apiData(
-      await createD1PhotoUpload(env, { albumId, file, width, height, title }),
+      await createD1PhotoUpload(env, {
+        albumId,
+        clientUploadId,
+        display: { file: display, height: displayHeight, width: displayWidth },
+        height,
+        source: retainSource && file instanceof File ? file : undefined,
+        sourceBytes,
+        sourceFileName,
+        thumb: { file: thumb, height: thumbHeight, width: thumbWidth },
+        title,
+        width
+      }),
       { status: 201 }
     );
   } catch (error) {
@@ -48,6 +84,10 @@ export async function POST(
     console.error("Failed to upload JPEG", error);
     return apiError("upload_failed", "The JPEG could not be stored.", 500);
   }
+}
+
+async function isJpeg(file: File) {
+  return file.type === "image/jpeg" && await hasJpegSignature(file);
 }
 
 async function hasJpegSignature(file: File) {

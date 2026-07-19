@@ -34,15 +34,25 @@ optimization, not part of the first working contract.
 `POST /api/admin/albums/:albumId/photos` accepts `multipart/form-data` fields:
 
 ```txt
-file    JPEG file, maximum 20 MiB
-width   positive integer
-height  positive integer
-title   optional
+clientUploadId  UUID v4 retained for idempotent retry
+sourceFileName  original selected filename
+sourceBytes     original selected byte size, maximum 20 MiB
+retainSource    `true` only when the private source should be retained
+file            optional source JPEG; required only when retainSource=true
+width/height    positive source dimensions
+thumb           generated JPEG, maximum 512 KiB
+thumbWidth/Height
+display         generated JPEG, maximum 2 MiB
+displayWidth/Height
+title           optional
 ```
 
-The Worker checks MIME type and JPEG magic bytes, writes the unchanged source file to
-private R2, then creates canonical `Photo`, `AlbumPhoto`, `Asset`, and `UploadJob` rows.
-If the D1 batch fails, the newly written R2 object is deleted.
+The Worker checks MIME type and JPEG magic bytes for every uploaded file. It always
+writes real `thumb`/`display` files to public R2. When `retainSource=true`, it additionally
+writes the unchanged source to private R2. It then creates canonical `Photo`,
+`AlbumPhoto`, two or three `Asset` rows, and one `UploadJob`. If an R2 or D1 step fails,
+newly written R2 objects are deleted. Repeating a completed request with the same
+`clientUploadId` returns the existing result without adding another photo.
 
 `GET /api/admin/assets/:assetId` streams an asset through the protected Worker. Private
 assets are returned with `Cache-Control: private, no-store`.
@@ -97,19 +107,23 @@ Public endpoints must only return published records and public asset URLs. They 
 Rules:
 
 - first upload milestone accepts JPEG only;
-- source JPEG goes to private R2;
-- no derivative is claimed until processing actually creates it;
+- source JPEG retention is optional and off by default to stay inside the R2 free tier;
+- `thumb` and `display` are generated in the browser before upload and are recorded only
+  after real R2 objects exist;
 - album/photo records start as draft/review;
 - upload order becomes initial photo position;
-- later image processing creates `thumb`, `display`, optional `expanded`, and optional
-  `downloadJpeg` in public R2.
+- later processing may move server-side and add optional `expanded` and `downloadJpeg`.
 
 ## Access
 
 On localhost, the API permits requests so the full flow can be tested with local D1
-and R2. On any external hostname, every admin endpoint requires the
+and R2. OpenNext Worker preview uses `ADMIN_LOCAL_BYPASS=true` from ignored `.dev.vars`
+because OpenNext normalizes its internal origin to the production URL. On any external
+deployment that bypass variable is absent, and every admin endpoint requires the
 `Cf-Access-Authenticated-User-Email` header to match the configured `ADMIN_EMAIL`.
-Missing Access configuration fails closed.
+Missing Access configuration fails closed. Production `workers.dev` and version preview
+URLs are disabled so the protected custom hostname is the only external route to these
+handlers.
 
 ## Secrets
 
