@@ -863,8 +863,8 @@ img {
 
 .portfolio-hero {
   position: relative;
-  height: calc(100svh - 16px);
-  min-height: 520px;
+  height: 100dvh;
+  min-height: 100svh;
   overflow: hidden;
   background: #000;
 }
@@ -1218,6 +1218,10 @@ img {
   animation: portfolio-viewer-in 180ms var(--ease-standard);
 }
 
+.portfolio-viewer:focus {
+  outline: none;
+}
+
 @keyframes portfolio-viewer-in {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -1234,7 +1238,7 @@ img {
   padding: 0;
   background: transparent;
   cursor: zoom-in;
-  touch-action: manipulation;
+  touch-action: none;
 }
 
 .portfolio-viewer__stage[data-zoomed="true"] {
@@ -1267,7 +1271,7 @@ img {
 }
 
 .portfolio-viewer__stage[data-zoomed="true"] img {
-  transform: translate3d(var(--viewer-pan-x, 0), var(--viewer-pan-y, 0), 0) scale(2.2);
+  transform: translate3d(var(--viewer-pan-x, 0), var(--viewer-pan-y, 0), 0) scale(var(--viewer-scale, 2.2));
 }
 
 .portfolio-viewer__stage[data-dragging="true"] img {

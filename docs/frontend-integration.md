@@ -48,6 +48,14 @@ Current viewing rules:
 - the fullscreen viewer explicitly contains the complete frame inside the viewport,
   including Safari; the first click/tap enlarges around the selected point, a short
   second click resets zoom, and a zoomed frame can be panned with a mouse drag;
+- on touch screens, a two-finger gesture pinches between 1x and 4x and one finger pans
+  the enlarged image; swipe navigation remains available at 1x, while taps and pinches
+  on the black letterbox area do not zoom the photo;
+- the fullscreen viewer stays mounted while photos change, so Safari never exposes the
+  album grid between swipe frames; initial focus stays on the dialog rather than drawing
+  a large focus box around the close control;
+- the homepage hero follows the dynamic visible viewport height and fills mobile Safari
+  as its browser chrome expands or collapses;
 - the minimal header hides while scrolling down and returns while scrolling up;
 - header icon buttons keep stable dimensions, color, and opacity and only change the
   cursor on hover;

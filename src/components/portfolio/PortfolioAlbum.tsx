@@ -6,6 +6,7 @@ import {
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
+  type TouchEvent as ReactTouchEvent,
   useCallback,
   useEffect,
   useMemo,
@@ -89,7 +90,6 @@ export function PortfolioAlbum({ slug }: { slug: string }) {
           albumTitle={album.title}
           archive={archive}
           index={openIndex}
-          key={photos[openIndex]?.id}
           onClose={closePhoto}
           onNavigate={openPhoto}
           photos={photos}
@@ -381,13 +381,12 @@ function PortfolioViewer({
 }) {
   const photo = photos[index];
   const source = getPortfolioPhotoSources(archive, previewUrls, photo).display;
-  const closeRef = useRef<HTMLButtonElement>(null);
   const viewerRef = useRef<HTMLDivElement>(null);
-  const touchStart = useRef<number | null>(null);
   const suppressStageClick = useRef(false);
   const [controls, setControls] = useState(true);
   const [transform, setTransform] = useState(defaultViewerTransform);
   const [dragging, setDragging] = useState(false);
+  const touchGestureRef = useRef<ViewerTouchGesture | null>(null);
   const dragRef = useRef<{
     moved: boolean;
     panX: number;
@@ -398,8 +397,10 @@ function PortfolioViewer({
   } | null>(null);
   const hideTimer = useRef<number | undefined>(undefined);
   const total = photos.length;
+  const zoomed = transform.scale > minimumZoomScale;
   const resetTransform = useCallback(() => {
     dragRef.current = null;
+    touchGestureRef.current = null;
     setDragging(false);
     setTransform(defaultViewerTransform());
   }, []);
@@ -425,7 +426,7 @@ function PortfolioViewer({
 
   useEffect(() => {
     document.body.style.overflow = "hidden";
-    closeRef.current?.focus();
+    viewerRef.current?.focus({ preventScroll: true });
     hideTimer.current = window.setTimeout(() => setControls(false), 2600);
     return () => {
       document.body.style.overflow = "";
@@ -460,26 +461,34 @@ function PortfolioViewer({
 
   const handleStageClick = (event: ReactMouseEvent<HTMLButtonElement>) => {
     if (suppressStageClick.current) return;
-    if (transform.zoomed) {
+    const stageBounds = event.currentTarget.getBoundingClientRect();
+    const keyboardClick = event.detail === 0;
+    const clientX = keyboardClick ? stageBounds.left + stageBounds.width / 2 : event.clientX;
+    const clientY = keyboardClick ? stageBounds.top + stageBounds.height / 2 : event.clientY;
+
+    if (!pointIsOnPhoto(clientX, clientY, stageBounds, photo, transform)) {
+      wakeControls();
+      return;
+    }
+
+    if (zoomed) {
       resetTransform();
       wakeControls();
       return;
     }
 
-    const bounds = event.currentTarget.getBoundingClientRect();
-    const keyboardClick = event.detail === 0;
     setTransform({
-      originX: keyboardClick ? 50 : clamp(((event.clientX - bounds.left) / bounds.width) * 100, 0, 100),
-      originY: keyboardClick ? 50 : clamp(((event.clientY - bounds.top) / bounds.height) * 100, 0, 100),
+      originX: clamp(((clientX - stageBounds.left) / stageBounds.width) * 100, 0, 100),
+      originY: clamp(((clientY - stageBounds.top) / stageBounds.height) * 100, 0, 100),
       panX: 0,
       panY: 0,
-      zoomed: true
+      scale: clickZoomScale
     });
     wakeControls();
   };
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    if (!transform.zoomed || event.pointerType === "touch") return;
+    if (!zoomed || event.pointerType === "touch") return;
     event.currentTarget.setPointerCapture(event.pointerId);
     dragRef.current = {
       moved: false,
@@ -504,8 +513,8 @@ function PortfolioViewer({
     const bounds = event.currentTarget.getBoundingClientRect();
     setTransform((value) => ({
       ...value,
-      panX: clampViewerPan(drag.panX + deltaX, bounds.width, value.originX),
-      panY: clampViewerPan(drag.panY + deltaY, bounds.height, value.originY)
+      panX: clampViewerPan(drag.panX + deltaX, bounds.width, value.originX, value.scale),
+      panY: clampViewerPan(drag.panY + deltaY, bounds.height, value.originY, value.scale)
     }));
   };
 
@@ -525,6 +534,166 @@ function PortfolioViewer({
     }, 0);
   };
 
+  const beginPinch = (event: ReactTouchEvent<HTMLButtonElement>) => {
+    if (event.touches.length < 2) return;
+    const stageBounds = event.currentTarget.getBoundingClientRect();
+    const first = event.touches[0];
+    const second = event.touches[1];
+    const center = touchCenter(first, second, stageBounds);
+    const enabled = pointIsOnPhoto(
+      center.x + stageBounds.left,
+      center.y + stageBounds.top,
+      stageBounds,
+      photo,
+      transform
+    );
+    const originX = transform.scale <= minimumZoomScale
+      ? (center.x / stageBounds.width) * 100
+      : transform.originX;
+    const originY = transform.scale <= minimumZoomScale
+      ? (center.y / stageBounds.height) * 100
+      : transform.originY;
+
+    touchGestureRef.current = {
+      enabled,
+      hadMultipleTouches: true,
+      mode: "pinch",
+      moved: false,
+      originX,
+      originY,
+      startCenterX: center.x,
+      startCenterY: center.y,
+      startDistance: touchDistance(first, second),
+      startPanX: transform.panX,
+      startPanY: transform.panY,
+      startScale: transform.scale,
+      startX: first.clientX,
+      startY: first.clientY
+    };
+    if (!enabled) return;
+
+    event.preventDefault();
+    setDragging(true);
+    setTransform((value) => ({ ...value, originX, originY }));
+  };
+
+  const handleTouchStart = (event: ReactTouchEvent<HTMLButtonElement>) => {
+    wakeControls();
+    if (event.touches.length >= 2) {
+      beginPinch(event);
+      return;
+    }
+
+    const touch = event.touches[0];
+    touchGestureRef.current = {
+      enabled: true,
+      hadMultipleTouches: false,
+      mode: "single",
+      moved: false,
+      originX: transform.originX,
+      originY: transform.originY,
+      startCenterX: touch.clientX,
+      startCenterY: touch.clientY,
+      startDistance: 0,
+      startPanX: transform.panX,
+      startPanY: transform.panY,
+      startScale: transform.scale,
+      startX: touch.clientX,
+      startY: touch.clientY
+    };
+  };
+
+  const handleTouchMove = (event: ReactTouchEvent<HTMLButtonElement>) => {
+    if (event.touches.length >= 2) {
+      if (touchGestureRef.current?.mode !== "pinch") beginPinch(event);
+      const gesture = touchGestureRef.current;
+      if (!gesture?.enabled || gesture.mode !== "pinch") return;
+
+      event.preventDefault();
+      const stageBounds = event.currentTarget.getBoundingClientRect();
+      const first = event.touches[0];
+      const second = event.touches[1];
+      const center = touchCenter(first, second, stageBounds);
+      const distance = touchDistance(first, second);
+      const scale = clamp(
+        gesture.startScale * (distance / Math.max(1, gesture.startDistance)),
+        1,
+        maximumZoomScale
+      );
+      const originXPixels = stageBounds.width * gesture.originX / 100;
+      const originYPixels = stageBounds.height * gesture.originY / 100;
+      const panX = center.x - originXPixels - scale * (
+        (gesture.startCenterX - originXPixels - gesture.startPanX) / gesture.startScale
+      );
+      const panY = center.y - originYPixels - scale * (
+        (gesture.startCenterY - originYPixels - gesture.startPanY) / gesture.startScale
+      );
+
+      gesture.moved = gesture.moved || Math.abs(distance - gesture.startDistance) > 2;
+      setTransform({
+        originX: gesture.originX,
+        originY: gesture.originY,
+        panX: clampViewerPan(panX, stageBounds.width, gesture.originX, scale),
+        panY: clampViewerPan(panY, stageBounds.height, gesture.originY, scale),
+        scale
+      });
+      return;
+    }
+
+    const gesture = touchGestureRef.current;
+    const touch = event.touches[0];
+    if (!gesture || !touch || gesture.mode !== "single") return;
+    const deltaX = touch.clientX - gesture.startX;
+    const deltaY = touch.clientY - gesture.startY;
+    gesture.moved = gesture.moved || Math.hypot(deltaX, deltaY) > 4;
+
+    if (gesture.startScale <= minimumZoomScale) return;
+    event.preventDefault();
+    const stageBounds = event.currentTarget.getBoundingClientRect();
+    setDragging(true);
+    setTransform((value) => ({
+      ...value,
+      panX: clampViewerPan(gesture.startPanX + deltaX, stageBounds.width, value.originX, value.scale),
+      panY: clampViewerPan(gesture.startPanY + deltaY, stageBounds.height, value.originY, value.scale)
+    }));
+  };
+
+  const handleTouchEnd = (event: ReactTouchEvent<HTMLButtonElement>) => {
+    const gesture = touchGestureRef.current;
+    if (!gesture || event.touches.length > 0) return;
+    touchGestureRef.current = null;
+    setDragging(false);
+
+    if (gesture.hadMultipleTouches) {
+      if (transform.scale <= minimumZoomScale) resetTransform();
+      suppressClickFor(450, suppressStageClick);
+      return;
+    }
+
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - gesture.startX;
+    const deltaY = touch.clientY - gesture.startY;
+    if (gesture.startScale > minimumZoomScale) {
+      if (gesture.moved) suppressClickFor(300, suppressStageClick);
+      return;
+    }
+
+    if (Math.abs(deltaX) > 55 && Math.abs(deltaX) > Math.abs(deltaY) * 1.15) {
+      suppressClickFor(400, suppressStageClick);
+      if (deltaX > 0) previous();
+      else next();
+      return;
+    }
+
+    if (gesture.moved) suppressClickFor(300, suppressStageClick);
+  };
+
+  const handleTouchCancel = () => {
+    touchGestureRef.current = null;
+    setDragging(false);
+    suppressClickFor(300, suppressStageClick);
+  };
+
   return (
     <div
       aria-label={`${albumTitle}, photo ${index + 1} of ${total}`}
@@ -534,42 +703,30 @@ function PortfolioViewer({
       onMouseMove={wakeControls}
       ref={viewerRef}
       role="dialog"
+      tabIndex={-1}
     >
       <button
-        aria-label={transform.zoomed ? "Reset zoom" : "Zoom photo"}
-        aria-pressed={transform.zoomed}
+        aria-label={zoomed ? "Reset zoom" : "Zoom photo"}
+        aria-pressed={zoomed}
         className="portfolio-viewer__stage"
         data-dragging={dragging ? "true" : undefined}
-        data-zoomed={transform.zoomed ? "true" : undefined}
+        data-zoomed={zoomed ? "true" : undefined}
         onClick={handleStageClick}
         onPointerCancel={finishPointerDrag}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={finishPointerDrag}
+        onTouchCancel={handleTouchCancel}
+        onTouchEnd={handleTouchEnd}
+        onTouchMove={handleTouchMove}
+        onTouchStart={handleTouchStart}
         style={{
           "--viewer-origin-x": `${transform.originX}%`,
           "--viewer-origin-y": `${transform.originY}%`,
           "--viewer-pan-x": `${transform.panX}px`,
-          "--viewer-pan-y": `${transform.panY}px`
+          "--viewer-pan-y": `${transform.panY}px`,
+          "--viewer-scale": transform.scale
         } as CSSProperties}
-        onTouchEnd={(event) => {
-          const start = touchStart.current;
-          touchStart.current = null;
-          if (start === null) return;
-          const delta = event.changedTouches[0].clientX - start;
-          if (Math.abs(delta) > 55) {
-            suppressStageClick.current = true;
-            window.setTimeout(() => {
-              suppressStageClick.current = false;
-            }, 400);
-          }
-          if (delta > 55) previous();
-          if (delta < -55) next();
-        }}
-        onTouchStart={(event) => {
-          touchStart.current = event.touches[0].clientX;
-          wakeControls();
-        }}
         type="button"
       >
         {source ? (
@@ -584,7 +741,7 @@ function PortfolioViewer({
           />
         ) : null}
       </button>
-      <button aria-label="Close viewer" className="portfolio-viewer__control portfolio-viewer__close" onClick={onClose} ref={closeRef} type="button">
+      <button aria-label="Close viewer" className="portfolio-viewer__control portfolio-viewer__close" onClick={onClose} type="button">
         <X aria-hidden />
       </button>
       <button aria-label="Previous photo" className="portfolio-viewer__control portfolio-viewer__arrow portfolio-viewer__arrow--previous" onClick={previous} type="button">
@@ -601,17 +758,79 @@ function PortfolioViewer({
   );
 }
 
-const viewerScale = 2.2;
+type ViewerTransform = ReturnType<typeof defaultViewerTransform>;
+
+type ViewerTouchGesture = {
+  enabled: boolean;
+  hadMultipleTouches: boolean;
+  mode: "pinch" | "single";
+  moved: boolean;
+  originX: number;
+  originY: number;
+  startCenterX: number;
+  startCenterY: number;
+  startDistance: number;
+  startPanX: number;
+  startPanY: number;
+  startScale: number;
+  startX: number;
+  startY: number;
+};
+
+const clickZoomScale = 2.2;
+const maximumZoomScale = 4;
+const minimumZoomScale = 1.01;
 
 function defaultViewerTransform() {
-  return { originX: 50, originY: 50, panX: 0, panY: 0, zoomed: false };
+  return { originX: 50, originY: 50, panX: 0, panY: 0, scale: 1 };
 }
 
-function clampViewerPan(value: number, size: number, originPercent: number) {
+function clampViewerPan(value: number, size: number, originPercent: number, scale: number) {
   const origin = originPercent / 100;
-  const minimum = -(viewerScale - 1) * size * (1 - origin);
-  const maximum = (viewerScale - 1) * size * origin;
+  const minimum = -(scale - 1) * size * (1 - origin);
+  const maximum = (scale - 1) * size * origin;
   return clamp(value, minimum, maximum);
+}
+
+function pointIsOnPhoto(
+  clientX: number,
+  clientY: number,
+  stageBounds: DOMRect,
+  photo: LocalArchivePhoto,
+  transform: ViewerTransform
+) {
+  const ratio = safePhotoRatio(photo);
+  const baseWidth = Math.min(stageBounds.width, stageBounds.height * ratio);
+  const baseHeight = baseWidth / ratio;
+  const baseLeft = (stageBounds.width - baseWidth) / 2;
+  const baseTop = (stageBounds.height - baseHeight) / 2;
+  const originX = stageBounds.width * transform.originX / 100;
+  const originY = stageBounds.height * transform.originY / 100;
+  const left = stageBounds.left + originX + transform.scale * (baseLeft - originX) + transform.panX;
+  const top = stageBounds.top + originY + transform.scale * (baseTop - originY) + transform.panY;
+  const right = left + baseWidth * transform.scale;
+  const bottom = top + baseHeight * transform.scale;
+  return clientX >= left && clientX <= right && clientY >= top && clientY <= bottom;
+}
+
+type TouchPoint = { clientX: number; clientY: number };
+
+function touchCenter(first: TouchPoint, second: TouchPoint, stageBounds: DOMRect) {
+  return {
+    x: (first.clientX + second.clientX) / 2 - stageBounds.left,
+    y: (first.clientY + second.clientY) / 2 - stageBounds.top
+  };
+}
+
+function touchDistance(first: TouchPoint, second: TouchPoint) {
+  return Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY);
+}
+
+function suppressClickFor(duration: number, target: { current: boolean }) {
+  target.current = true;
+  window.setTimeout(() => {
+    target.current = false;
+  }, duration);
 }
 
 function clamp(value: number, minimum: number, maximum: number) {
