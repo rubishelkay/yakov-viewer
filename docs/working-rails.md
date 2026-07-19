@@ -115,6 +115,10 @@ Current status:
   `3000d166-ad54-4963-9b17-2aaf52f0bdf0`: JS favicon, stable header controls,
   Safari-safe contained viewer with point-aware zoom and drag panning, edge-to-edge
   justified M rows, and album-based tag results.
+- The July 19 mobile Safari correction is live as Worker version
+  `8df2baa5-67dd-4602-a2ca-6b264ba56552`: the hero follows the dynamic viewport,
+  swipe navigation keeps one opaque viewer mounted, pinch/pan is constrained to the
+  rendered photo, and the close control no longer receives forced initial focus.
   Production D1 migration `0002_album_photo_order.sql` remains applied and its
   foreign-key check is clean.
 
