@@ -9,13 +9,14 @@ API; do not put credentials, image files, or generated output in Git.
 - Never print or commit OAuth tokens, API tokens, R2 keys, `.env`, or `.dev.vars`.
 - Do not touch the unrelated R2 buckets `cards`, `mbst1`, or `yakov`.
 - Keep the old Pages project available until the Worker hostname is verified.
-- Keep `ADMIN_ACCESS_ENABLED=false` until Cloudflare Access is tested.
+- Keep Cloudflare Access in front of both admin page and API path families while
+  `ADMIN_ACCESS_ENABLED=true` enforces the same identity inside the Worker.
 
 ## Current Production Resources
 
 ```txt
 Worker:             yakov-viewer
-technical URL:      yakov-viewer.jacobjshmol.workers.dev
+technical URL:      disabled (`workers_dev=false`)
 D1:                 yakov_archive
 private R2:         yakov-private-assets
 public R2:          yakov-public-assets
@@ -35,12 +36,22 @@ Completed on 2026-07-18:
 - technical Worker routes return 200, including a real album and health endpoint;
 - `assets.yakov.shmol.cc` is active and serves immutable JPEG responses;
 - `yakov.shmol.cc/*` is active on Worker version
-  `d7e083cb-f4ef-4df3-a7f3-7c5473cc184a`;
+  `652010be-06b1-49e6-a051-6a1a878be02a`;
+- Cloudflare Access application `Yakov Viewer Admin` protects `/admin`, `/admin/*`,
+  `/api/admin`, and `/api/admin/*` with the reusable `Owner only` policy;
+- the Access policy allows exactly `Jacobjshmol@gmail.com` and uses the built-in
+  Cloudflare identity provider;
 - the old Pages custom-domain attachment was removed, while the Pages project was kept
   for rollback;
 - production QA passed for `/`, `/albums`, a 36-photo album, and `/api/health`;
 - the public index contains 9 real albums, no demo albums, and no localhost media URLs;
-- external admin returns 404 and admin API returns 503 while Access is disabled.
+- migration `0003_upload_job_photo.sql` is applied; no migrations remain pending and
+  the production foreign-key check passes;
+- `ADMIN_ACCESS_ENABLED=true`; anonymous admin and admin API requests redirect to the
+  correct Access application, while public routes continue to return 200.
+- owner OAuth consent completed on 2026-07-22; `/admin/ingest` loads for
+  `Jacobjshmol@gmail.com` and a manual archive refresh succeeds through the protected
+  production API.
 
 ## Current Domain Routing
 
@@ -53,7 +64,8 @@ equivalent Worker Route instead:
 ```
 
 The route serves the same OpenNext Worker to visitors while preserving the existing DNS
-record. `workers_dev` and preview URLs stay enabled as an independent technical check.
+record. `workers_dev` and preview URLs are disabled so admin paths cannot bypass Access
+through an alternate Worker hostname.
 
 Rollback:
 
@@ -63,15 +75,13 @@ Rollback:
 
 ## Access And Admin
 
-After the public hostname is stable:
+Access was created on 2026-07-21. Its non-secret runtime identifiers are recorded in
+`wrangler.jsonc`; server-side JWT validation is active in production.
 
-1. Create a Cloudflare Access self-hosted application for:
-   - `yakov.shmol.cc/admin/*`
-   - `yakov.shmol.cc/api/admin/*`
-2. Allow only `Jacobjshmol@gmail.com` for the first milestone.
-3. Verify the authenticated email header reaches the Worker.
-4. Change `ADMIN_ACCESS_ENABLED` to `true`, rebuild types, and deploy.
-5. Test archive read, album create, one JPEG upload, private readback, and bin behavior.
+Next:
+
+1. In a separately confirmed step, test album create and one JPEG upload, then verify
+   private source readback, public derivatives, D1 rows, and bin behavior.
 
 ## GitHub Workers Builds
 

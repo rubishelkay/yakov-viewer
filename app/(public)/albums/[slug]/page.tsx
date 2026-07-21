@@ -3,12 +3,10 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 import { PortfolioAlbum } from "@/components/portfolio/PortfolioAlbum";
-import { adminArchive } from "@/admin/mock-data";
+import { getPublicAlbumBySlug, getPublicAlbums } from "@/lib/portfolio";
 
 export function generateStaticParams() {
-  return adminArchive.albums
-    .filter((album) => album.status === "published" && !album.isDemo)
-    .map((album) => ({ slug: album.slug }));
+  return getPublicAlbums().map((album) => ({ slug: album.slug }));
 }
 
 export async function generateMetadata({
@@ -17,7 +15,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const album = adminArchive.albums.find((item) => item.slug === slug);
+  const album = getPublicAlbumBySlug(slug);
 
   return {
     title: album?.title ?? "Album",
@@ -27,15 +25,13 @@ export async function generateMetadata({
 
 export default async function AlbumPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const album = adminArchive.albums.find(
-    (item) => item.slug === slug && item.status === "published" && !item.isDemo
-  );
+  const album = getPublicAlbumBySlug(slug);
 
   if (!album) notFound();
 
   return (
     <Suspense fallback={<main className="portfolio-empty">Loading album...</main>}>
-      <PortfolioAlbum slug={slug} />
+      <PortfolioAlbum album={album} />
     </Suspense>
   );
 }

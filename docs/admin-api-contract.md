@@ -35,10 +35,7 @@ optimization, not part of the first working contract.
 
 ```txt
 clientUploadId  UUID v4 retained for idempotent retry
-sourceFileName  original selected filename
-sourceBytes     original selected byte size, maximum 20 MiB
-retainSource    `true` only when the private source should be retained
-file            optional source JPEG; required only when retainSource=true
+file            required source JPEG, preserved privately, maximum 20 MiB
 width/height    positive source dimensions
 thumb           generated JPEG, maximum 512 KiB
 thumbWidth/Height
@@ -48,9 +45,9 @@ title           optional
 ```
 
 The Worker checks MIME type and JPEG magic bytes for every uploaded file. It always
-writes real `thumb`/`display` files to public R2. When `retainSource=true`, it additionally
-writes the unchanged source to private R2. It then creates canonical `Photo`,
-`AlbumPhoto`, two or three `Asset` rows, and one `UploadJob`. If an R2 or D1 step fails,
+writes real `thumb`/`display` files to public R2 and the unchanged source to private R2.
+It then creates canonical `Photo`, `AlbumPhoto`, three `Asset` rows, and one
+`UploadJob`. If an R2 or D1 step fails,
 newly written R2 objects are deleted. Repeating a completed request with the same
 `clientUploadId` returns the existing result without adding another photo.
 
@@ -107,7 +104,7 @@ Public endpoints must only return published records and public asset URLs. They 
 Rules:
 
 - first upload milestone accepts JPEG only;
-- source JPEG retention is optional and off by default to stay inside the R2 free tier;
+- every new upload retains its source JPEG in private R2;
 - `thumb` and `display` are generated in the browser before upload and are recorded only
   after real R2 objects exist;
 - album/photo records start as draft/review;
@@ -116,14 +113,13 @@ Rules:
 
 ## Access
 
-On localhost, the API permits requests so the full flow can be tested with local D1
-and R2. OpenNext Worker preview uses `ADMIN_LOCAL_BYPASS=true` from ignored `.dev.vars`
-because OpenNext normalizes its internal origin to the production URL. On any external
-deployment that bypass variable is absent, and every admin endpoint requires the
-`Cf-Access-Authenticated-User-Email` header to match the configured `ADMIN_EMAIL`.
-Missing Access configuration fails closed. Production `workers.dev` and version preview
-URLs are disabled so the protected custom hostname is the only external route to these
-handlers.
+On localhost, explicit ignored variables `ADMIN_RUNTIME_ENV=local` and
+`ADMIN_LOCAL_BYPASS=true` enable development. The bypass additionally checks that the
+request Host is localhost/127.0.0.1/::1. On external deployments the bypass variables
+are absent. Every admin request verifies the Cloudflare Access JWT signature, issuer,
+audience, expiry, and exact owner email with Cloudflare's remote JWK set. Missing or
+invalid Access configuration fails closed. Production `workers.dev` and version preview
+URLs are disabled so the protected custom hostname is the only external route.
 
 ## Secrets
 

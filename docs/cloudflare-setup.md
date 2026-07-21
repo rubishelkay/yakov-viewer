@@ -72,8 +72,8 @@ Before the first local Worker preview, create ignored `.dev.vars` from the safe
 `.dev.vars.example` template. `ADMIN_LOCAL_BYPASS` is strictly a local preview switch;
 do not add it to Worker production variables.
 
-The external admin remains disabled with `ADMIN_ACCESS_ENABLED=false` until Cloudflare
-Access is configured and tested.
+Production uses `ADMIN_ACCESS_ENABLED=true`. Local OpenNext preview overrides it through
+the ignored `.dev.vars` file and the two-factor local bypass described below.
 
 ## R2 Layout
 
@@ -129,7 +129,7 @@ Local and production verification completed on 2026-07-18:
 - `0001_archive.sql` applied successfully with 23 commands;
 - `archive_albums`, `archive_photos`, `album_photos`, and `archive_assets` exist;
 - `PRAGMA foreign_key_check` returned no violations.
-- the optional source-retention path was verified by uploading a JPEG through the local
+- the private source-retention path was verified by uploading a JPEG through the local
   OpenNext Worker into private R2;
 - the matching Photo, AlbumPhoto, Asset, and UploadJob rows were written to D1;
 - the protected asset endpoint returned byte-identical JPEG data;
@@ -138,6 +138,9 @@ Local and production verification completed on 2026-07-18:
   records, 1 set, and 11 tags;
 - production `PRAGMA foreign_key_check` returned no violations;
 - the seed is idempotent and contains only the real `thumb` and `display` assets.
+- `0003_upload_job_photo.sql` was applied remotely on 2026-07-21; `upload_jobs.photo_id`
+  is nullable, indexed, and references `archive_photos(id)` with `ON DELETE CASCADE`;
+- the post-migration production foreign-key check returned no violations.
 
 ## Admin Access
 
@@ -150,26 +153,36 @@ yakov.shmol.cc/api/admin
 yakov.shmol.cc/api/admin/*
 ```
 
-Use Google as the identity provider and allow exactly this owner email:
+Use the built-in Cloudflare account identity provider and allow exactly this account
+member email:
 
 ```txt
 Jacobjshmol@gmail.com
 ```
 
+Created on 2026-07-21 as `Yakov Viewer Admin`, using the reusable `Owner only` policy.
+The non-secret team domain and application AUD are stored in `wrangler.jsonc` for JWT
+verification. The first guarded deploy is Worker version
+`652010be-06b1-49e6-a051-6a1a878be02a`, with `ADMIN_ACCESS_ENABLED=true`.
+
 Application-level login is not required for the first upload milestone.
 
-The Google OAuth client secret belongs in Cloudflare Zero Trust / Google Cloud only. It
-must never be entered into source files, Wrangler variables, `.env.example`, or GitHub.
+This avoids adding a Google OAuth client secret. If a direct Google identity provider is
+introduced later, its secret belongs only in Cloudflare Zero Trust / Google Cloud and
+must never enter source files, Wrangler variables, `.env.example`, or GitHub.
 
-The application API verifies Cloudflare Access on non-local hosts. The expected
-email is configured as the non-secret `ADMIN_EMAIL` Worker variable; requests without a
-matching Access identity fail closed.
+The application API verifies the signed Cloudflare Access JWT on non-local hosts. It
+checks the Access issuer, application audience, expiry, and exact email. The expected
+email is the non-secret `ADMIN_EMAIL` Worker variable; the team domain and application
+AUD are also non-secret Worker variables. Requests without a valid owner JWT fail closed.
 
-Until the Access application exists, `ADMIN_ACCESS_ENABLED=false` makes external
-`/admin` return 404 and `/api/admin/*` return 503. Localhost remains available for
-development. Local OpenNext Worker preview additionally reads
+If Access is deliberately disabled in a future recovery deployment,
+`ADMIN_ACCESS_ENABLED=false` makes external `/admin` return 404 and `/api/admin/*`
+return 503. Local OpenNext Worker preview reads
 `ADMIN_LOCAL_BYPASS=true` from ignored `.dev.vars`; that flag must never be set in the
-production Worker.
+production Worker. The bypass also requires `ADMIN_RUNTIME_ENV=local` and refuses to
+run when `ADMIN_ACCESS_ENABLED=true`. OpenNext rewrites the local request host to the
+configured site hostname, so the bypass intentionally does not depend on `Host`.
 
 `workers_dev` and Worker version preview URLs are disabled in production configuration.
 This prevents an alternate hostname from reaching admin routes outside the Access
@@ -186,9 +199,10 @@ The initial production configuration targets Cloudflare Free:
 - D1 Free: 5 million rows read and 100,000 rows written per day;
 - Cloudflare Access: owner-only use is comfortably below the free plan's 50-user limit.
 
-The uploader stores `thumb + display` by default. A private `sourceJpeg` is retained only
-when the owner explicitly enables it for that batch. Do not use R2 Infrequent Access for
-this first version because its storage has no free tier.
+The uploader stores public `thumb + display` and a private unchanged `sourceJpeg` for
+every new photo. The admin warns at an 8 GiB working budget; R2 billing or upload volume
+must be reviewed as the archive approaches the plan allowance. Do not use R2 Infrequent
+Access for this first version.
 
 ## Remote Change Policy
 
@@ -221,21 +235,26 @@ Repository-safe files include binding names, schema/migrations, Worker configura
 
 ## Current Audit Status
 
-As of 2026-07-19:
+As of 2026-07-21:
 
 - Next.js 16.2.6 builds successfully with `@opennextjs/cloudflare` 1.20.1;
-- the generated Worker serves `/`, real album routes, and `/api/health` on
-  `yakov-viewer.jacobjshmol.workers.dev`;
+- the generated Worker serves `/`, real album routes, and `/api/health` through
+  `yakov.shmol.cc/*`; the `workers.dev` and preview hostnames are disabled;
 - local D1 and both local R2 bindings are visible to the Worker;
 - the ordered multipart JPEG path has passed a local D1/R2 round-trip test with real
-  browser-generated `thumb`/`display`, optional unchanged private source, and
+  browser-generated `thumb`/`display`, unchanged private source, and
   idempotent retry;
 - the R2 custom domain `assets.yakov.shmol.cc` is active with TLS 1.2 minimum;
 - clean-browser production QA loaded the 9 real album covers and all 36 photos in the
   checked album with zero failed images or console errors;
-- external `/admin` is hidden and the admin API is disabled until Access is ready;
-- production migration `0003_upload_job_photo.sql` has not yet been applied;
+- Cloudflare Access intercepts unauthenticated `/admin*` and `/api/admin*` requests;
+- the owner completed the Cloudflare identity-provider consent on 2026-07-22;
+  authenticated `/admin/ingest` and a manual production archive refresh both succeed;
+- production migration `0003_upload_job_photo.sql` is applied and the foreign-key check
+  remains clean;
 - `yakov.shmol.cc/*` is live on the OpenNext Worker through a zone Worker Route;
 - the old Pages custom-domain attachment is removed, but the Pages project remains
   available for rollback;
-- GitHub Workers Builds and Cloudflare Access are not configured yet.
+- Cloudflare Access is configured and application-level JWT validation is active;
+- GitHub Workers Builds remain a later milestone after the first real upload flow is
+  verified manually.

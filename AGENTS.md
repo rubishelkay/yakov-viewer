@@ -2,8 +2,8 @@
 
 ## Project Goal
 
-Build a premium, static-first photography portfolio for Yakov Shmol at `yakov.shmol.cc`.
-The site presents film rolls, selected frames, archive views, and individual photo pages.
+Build a premium photography portfolio and private archive admin for Yakov Shmol at `yakov.shmol.cc`.
+The accepted public surface is the current Fable-derived homepage, album index, album viewer, and tag pages.
 Logjamming is legacy/private backstage context, not the public product.
 
 ## Read First
@@ -16,11 +16,12 @@ Logjamming is legacy/private backstage context, not the public product.
 
 ## Engineering Rules
 
-- Keep public routes prerender-first where practical, while deploying the combined public site, admin, and API to Cloudflare Workers through OpenNext.
+- Keep public routes prerender-first where practical, while deploying the combined public site, protected admin, and API to Cloudflare Workers through OpenNext.
+- Keep public rendering independent from admin mocks, localStorage, and private archive records.
 - Do not commit high-resolution originals, private imports, `.env`, Cloudflare tokens, or R2 credentials.
 - Do not expose GPS or sensitive EXIF in public content by default.
 - Validate content before build with `pnpm validate:content`.
-- Use fixed responsive image widths; never generate arbitrary Cloudflare transform sizes from user input.
+- Use stored `thumb` and `display` assets for public grids and viewing; never expose private `sourceJpeg` keys.
 - Keep design tokens centralized in `src/styles/tokens.css`.
 - Preserve accessibility: alt text, keyboard lightbox controls, focus states, contrast, and reduced-motion behavior.
 

@@ -15,28 +15,18 @@ import {
   useSyncExternalStore
 } from "react";
 
-import { type LocalArchivePhoto, useAdminArchive } from "@/admin/admin-state";
 import { PortfolioImage } from "@/components/portfolio/PortfolioImage";
 import { PortfolioTagLinks } from "@/components/portfolio/PortfolioTagLinks";
-import {
-  getPortfolioPhotoSources,
-  getPublicAlbumBySlug,
-  getPublicPhotosForAlbum
-} from "@/lib/portfolio";
+import type { PublicAlbumDetail, PublicPhoto } from "@/lib/portfolio";
 
 type ViewMode = "s" | "m" | "l";
 
 const viewModeKey = "yakov-public-view-mode";
 const viewModeListeners = new Set<() => void>();
 
-export function PortfolioAlbum({ slug }: { slug: string }) {
+export function PortfolioAlbum({ album }: { album: PublicAlbumDetail }) {
   const searchParams = useSearchParams();
-  const { archive, previewUrls } = useAdminArchive();
-  const album = getPublicAlbumBySlug(archive, slug);
-  const photos = useMemo(
-    () => (album ? getPublicPhotosForAlbum(archive, album.id) : []),
-    [album, archive]
-  );
+  const photos = album.photos;
   const mode = useSyncExternalStore(subscribeToViewMode, getStoredViewMode, getServerViewMode);
   const [openIndex, setOpenIndex] = useState<number | null>(() =>
     parsePhotoIndex(searchParams.get("photo"), photos.length)
@@ -49,12 +39,12 @@ export function PortfolioAlbum({ slug }: { slug: string }) {
 
   const openPhoto = useCallback((index: number) => {
     setOpenIndex(index);
-    window.history.replaceState(null, "", `/albums/${slug}?photo=${index + 1}`);
-  }, [slug]);
+    window.history.replaceState(null, "", `/albums/${album.slug}?photo=${index + 1}`);
+  }, [album.slug]);
   const closePhoto = useCallback(() => {
     setOpenIndex(null);
-    window.history.replaceState(null, "", `/albums/${slug}`);
-  }, [slug]);
+    window.history.replaceState(null, "", `/albums/${album.slug}`);
+  }, [album.slug]);
 
   useEffect(() => {
     const syncFromHistory = () => {
@@ -65,35 +55,27 @@ export function PortfolioAlbum({ slug }: { slug: string }) {
     return () => window.removeEventListener("popstate", syncFromHistory);
   }, [photos.length]);
 
-  if (!album) {
-    return <main className="portfolio-empty">Album is not published.</main>;
-  }
-
   return (
     <main className="portfolio-album-page">
       <header className="portfolio-album-head">
         <div>
           <h1>{album.title}</h1>
-          <p><PortfolioTagLinks album={album} archive={archive} count={photos.length} /></p>
+          <p><PortfolioTagLinks album={album} count={photos.length} /></p>
         </div>
         <ViewModeToggle mode={mode} onChange={setViewMode} />
       </header>
       <PortfolioPhotoGrid
-        archive={archive}
         mode={mode}
         onOpen={openPhoto}
         photos={photos}
-        previewUrls={previewUrls}
       />
       {openIndex !== null ? (
         <PortfolioViewer
           albumTitle={album.title}
-          archive={archive}
           index={openIndex}
           onClose={closePhoto}
           onNavigate={openPhoto}
           photos={photos}
-          previewUrls={previewUrls}
         />
       ) : null}
     </main>
@@ -153,17 +135,13 @@ function ViewModeToggle({ mode, onChange }: { mode: ViewMode; onChange: (mode: V
 }
 
 function PortfolioPhotoGrid({
-  archive,
   mode,
   onOpen,
-  photos,
-  previewUrls
+  photos
 }: {
-  archive: ReturnType<typeof useAdminArchive>["archive"];
   mode: ViewMode;
   onOpen: (index: number) => void;
-  photos: LocalArchivePhoto[];
-  previewUrls: Record<string, string>;
+  photos: PublicPhoto[];
 }) {
   if (mode === "l") {
     return (
@@ -174,7 +152,6 @@ function PortfolioPhotoGrid({
             key={photo.id}
             onOpen={() => onOpen(index)}
             photo={photo}
-            sources={getPortfolioPhotoSources(archive, previewUrls, photo)}
           />
         ))}
       </div>
@@ -184,10 +161,8 @@ function PortfolioPhotoGrid({
   if (mode === "m") {
     return (
       <JustifiedPhotoGrid
-        archive={archive}
         onOpen={onOpen}
         photos={photos}
-        previewUrls={previewUrls}
       />
     );
   }
@@ -199,7 +174,6 @@ function PortfolioPhotoGrid({
           key={photo.id}
           onOpen={() => onOpen(index)}
           photo={photo}
-          sources={getPortfolioPhotoSources(archive, previewUrls, photo)}
         />
       ))}
     </div>
@@ -209,19 +183,15 @@ function PortfolioPhotoGrid({
 type JustifiedRow = {
   filled: boolean;
   height: number;
-  items: Array<{ index: number; photo: LocalArchivePhoto }>;
+  items: Array<{ index: number; photo: PublicPhoto }>;
 };
 
 function JustifiedPhotoGrid({
-  archive,
   onOpen,
-  photos,
-  previewUrls
+  photos
 }: {
-  archive: ReturnType<typeof useAdminArchive>["archive"];
   onOpen: (index: number) => void;
-  photos: LocalArchivePhoto[];
-  previewUrls: Record<string, string>;
+  photos: PublicPhoto[];
 }) {
   const gridRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -258,7 +228,6 @@ function JustifiedPhotoGrid({
               key={photo.id}
               onOpen={() => onOpen(index)}
               photo={photo}
-              sources={getPortfolioPhotoSources(archive, previewUrls, photo)}
             />
           ))}
         </div>
@@ -267,7 +236,7 @@ function JustifiedPhotoGrid({
   );
 }
 
-function buildJustifiedRows(photos: LocalArchivePhoto[], width: number, gap: number): JustifiedRow[] {
+function buildJustifiedRows(photos: PublicPhoto[], width: number, gap: number): JustifiedRow[] {
   if (!photos.length) return [];
 
   const targetHeight = getTargetRowHeight(width);
@@ -317,7 +286,7 @@ function getTargetRowHeight(width: number) {
   return Math.min(250, Math.max(195, width * 0.135));
 }
 
-function safePhotoRatio(photo: LocalArchivePhoto) {
+function safePhotoRatio(photo: PublicPhoto) {
   return photo.width > 0 && photo.height > 0 ? photo.width / photo.height : 1.5;
 }
 
@@ -325,16 +294,14 @@ function PhotoButton({
   display = false,
   justifiedWidth,
   onOpen,
-  photo,
-  sources
+  photo
 }: {
   display?: boolean;
   justifiedWidth?: number;
   onOpen: () => void;
-  photo: LocalArchivePhoto;
-  sources: { display?: string; thumb?: string };
+  photo: PublicPhoto;
 }) {
-  const source = display ? sources.display ?? sources.thumb : sources.thumb ?? sources.display;
+  const source = display ? photo.displayUrl : photo.thumbUrl;
 
   return (
     <button
@@ -364,23 +331,19 @@ function PhotoButton({
 
 function PortfolioViewer({
   albumTitle,
-  archive,
   index,
   onClose,
   onNavigate,
-  photos,
-  previewUrls
+  photos
 }: {
   albumTitle: string;
-  archive: ReturnType<typeof useAdminArchive>["archive"];
   index: number;
   onClose: () => void;
   onNavigate: (index: number) => void;
-  photos: LocalArchivePhoto[];
-  previewUrls: Record<string, string>;
+  photos: PublicPhoto[];
 }) {
   const photo = photos[index];
-  const source = getPortfolioPhotoSources(archive, previewUrls, photo).display;
+  const source = photo.displayUrl;
   const viewerRef = useRef<HTMLDivElement>(null);
   const suppressStageClick = useRef(false);
   const [controls, setControls] = useState(true);
@@ -796,7 +759,7 @@ function pointIsOnPhoto(
   clientX: number,
   clientY: number,
   stageBounds: DOMRect,
-  photo: LocalArchivePhoto,
+  photo: PublicPhoto,
   transform: ViewerTransform
 ) {
   const ratio = safePhotoRatio(photo);

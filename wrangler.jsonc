@@ -42,7 +42,9 @@
     }
   ],
   "vars": {
-    "ADMIN_ACCESS_ENABLED": "false",
+    "ACCESS_APP_AUD": "93f908da0bb2dcbc27e7ac3438cb22fd2f141af2ea192305dcc326c16e62b1c7",
+    "ACCESS_TEAM_DOMAIN": "https://calm-math-532f.cloudflareaccess.com",
+    "ADMIN_ACCESS_ENABLED": "true",
     "ADMIN_EMAIL": "Jacobjshmol@gmail.com",
     "NEXT_PUBLIC_SITE_URL": "https://yakov.shmol.cc",
     "NEXT_PUBLIC_ASSET_BASE_URL": "https://assets.yakov.shmol.cc",

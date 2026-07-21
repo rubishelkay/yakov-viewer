@@ -1,48 +1,18 @@
 import "server-only";
 
-type AdminAccessEnv = Pick<CloudflareEnv, "ADMIN_ACCESS_ENABLED" | "ADMIN_EMAIL"> & {
-  ADMIN_LOCAL_BYPASS?: string;
-};
+import {
+  verifyAdminAccess,
+  type AdminAccessEnv
+} from "./admin-auth-core";
 
-export function isAdminAccessEnabled(value: string | undefined) {
-  return value === "true";
-}
+export { verifyAdminAccess } from "./admin-auth-core";
 
-export function requireAdminAccess(request: Request, env: AdminAccessEnv) {
-  if (isAdminLocalBypassEnabled(env.ADMIN_LOCAL_BYPASS)) {
-    return null;
-  }
+export async function requireAdminAccess(request: Request, env: AdminAccessEnv) {
+  const result = await verifyAdminAccess(request.headers, env);
+  if (result.ok) return null;
 
-  if (!isAdminAccessEnabled(env.ADMIN_ACCESS_ENABLED)) {
-    return Response.json(
-      { ok: false, error: { code: "admin_disabled", message: "Admin access is not enabled." } },
-      { status: 503 }
-    );
-  }
-
-  const expectedEmail = env.ADMIN_EMAIL?.trim().toLowerCase();
-  if (!expectedEmail) {
-    return Response.json(
-      { ok: false, error: { code: "admin_access_unconfigured", message: "Admin access is not configured." } },
-      { status: 503 }
-    );
-  }
-
-  const authenticatedEmail = request.headers
-    .get("Cf-Access-Authenticated-User-Email")
-    ?.trim()
-    .toLowerCase();
-
-  if (authenticatedEmail !== expectedEmail) {
-    return Response.json(
-      { ok: false, error: { code: "unauthorized", message: "Cloudflare Access authentication is required." } },
-      { status: 401 }
-    );
-  }
-
-  return null;
-}
-
-export function isAdminLocalBypassEnabled(value: string | undefined) {
-  return value === "true";
+  return Response.json(
+    { ok: false, error: { code: result.code, message: result.message } },
+    { status: result.status }
+  );
 }

@@ -5,14 +5,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { Shuffle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { useAdminArchive } from "@/admin/admin-state";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
-import { getPublicAlbums, getPublicPhotosForAlbum } from "@/lib/portfolio";
+import type { PublicAlbumSummary } from "@/lib/portfolio";
 
-export function PortfolioHeader() {
+export function PortfolioHeader({ albums }: { albums: PublicAlbumSummary[] }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { archive } = useAdminArchive();
   const [overHero, setOverHero] = useState(pathname === "/");
   const [hidden, setHidden] = useState(false);
   const lastScrollY = useRef(0);
@@ -64,14 +62,12 @@ export function PortfolioHeader() {
   }, [pathname]);
 
   function openRandomPhoto() {
-    const choices = getPublicAlbums(archive)
-      .map((album) => ({ album, photos: getPublicPhotosForAlbum(archive, album.id) }))
-      .filter((choice) => choice.photos.length > 0);
+    const choices = albums.filter((album) => album.photoCount > 0);
 
     if (!choices.length) return;
-    const choice = choices[Math.floor(Math.random() * choices.length)];
-    const photoIndex = Math.floor(Math.random() * choice.photos.length);
-    router.push(`/albums/${choice.album.slug}?photo=${photoIndex + 1}`);
+    const album = choices[Math.floor(Math.random() * choices.length)];
+    const photoIndex = Math.floor(Math.random() * album.photoCount);
+    router.push(`/albums/${album.slug}?photo=${photoIndex + 1}`);
   }
 
   const headerClassName = [

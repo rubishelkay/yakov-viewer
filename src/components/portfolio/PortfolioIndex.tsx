@@ -4,25 +4,21 @@ import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { useAdminArchive } from "@/admin/admin-state";
 import { PortfolioAlbumCard } from "@/components/portfolio/PortfolioAlbumCard";
 import { PortfolioImage } from "@/components/portfolio/PortfolioImage";
-import {
-  getAlbumCover,
-  getHomepageAlbums,
-  getHeroAlbums,
-  getPublicAlbums,
-  isFilmAlbum
-} from "@/lib/portfolio";
+import { isFilmAlbum, type PublicAlbumSummary } from "@/lib/portfolio";
 
 type AlbumFilter = "all" | "film" | "digital";
 
-export function PortfolioIndex({ hero = false }: { hero?: boolean }) {
-  const { archive, previewUrls } = useAdminArchive();
-  const albums = hero ? getHomepageAlbums(archive) : getPublicAlbums(archive);
-  const heroAlbums = getHeroAlbums(archive).filter((album) =>
-    getAlbumCover(archive, previewUrls, album)
-  );
+export function PortfolioIndex({
+  albums,
+  hero = false,
+  heroAlbums = []
+}: {
+  albums: PublicAlbumSummary[];
+  hero?: boolean;
+  heroAlbums?: PublicAlbumSummary[];
+}) {
   const [filter, setFilter] = useState<AlbumFilter>("all");
   const shownAlbums = useMemo(
     () =>
@@ -59,12 +55,7 @@ export function PortfolioIndex({ hero = false }: { hero?: boolean }) {
         </div>
         <div className="portfolio-album-grid">
           {shownAlbums.map((album) => (
-            <PortfolioAlbumCard
-              album={album}
-              archive={archive}
-              key={album.id}
-              previewUrls={previewUrls}
-            />
+            <PortfolioAlbumCard album={album} key={album.id} />
           ))}
         </div>
       </section>
@@ -72,8 +63,7 @@ export function PortfolioIndex({ hero = false }: { hero?: boolean }) {
   );
 }
 
-function PortfolioHero({ albums }: { albums: ReturnType<typeof getHeroAlbums> }) {
-  const { archive, previewUrls } = useAdminArchive();
+function PortfolioHero({ albums }: { albums: PublicAlbumSummary[] }) {
   const [active, setActive] = useState(0);
   const reducedMotion = useRef(false);
 
@@ -91,15 +81,14 @@ function PortfolioHero({ albums }: { albums: ReturnType<typeof getHeroAlbums> })
   return (
     <section className="portfolio-hero">
       {albums.map((album, index) => {
-        const cover = getAlbumCover(archive, previewUrls, album);
-        return cover ? (
+        return album.coverUrl ? (
           <PortfolioImage
             alt={`Cover of ${album.title}`}
             decoding="async"
             fetchPriority={index === 0 ? "high" : "low"}
             key={album.id}
             loading={index === 0 ? "eager" : "lazy"}
-            src={cover}
+            src={album.coverUrl}
             wrapperClassName={index === active ? "is-active" : undefined}
           />
         ) : null;

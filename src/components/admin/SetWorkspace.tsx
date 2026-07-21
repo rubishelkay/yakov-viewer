@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUp,
-  Check,
   CircleX,
   Maximize2,
   Plus,
@@ -22,22 +21,12 @@ import {
   useAdminArchive
 } from "@/admin/admin-state";
 import type {
-  ArchiveStatus,
-  SetLayoutMode
+  ArchiveStatus
 } from "@/admin/archive-schema";
 import { AdminDemoBadge } from "@/components/admin/AdminDemoBadge";
 import { useAdminConfirmDialog } from "@/components/admin/AdminConfirmDialog";
 import type { LocalArchiveAlbum } from "@/admin/admin-state";
 
-const layoutModes: Array<{ mode: SetLayoutMode; label: string; description: string }> = [
-  { mode: "fullscreen-carousel", label: "Hero rail", description: "3:2 covers" },
-  { mode: "triptych", label: "Triptych", description: "Three wide" },
-  { mode: "six-grid", label: "3 x 2", description: "Six covers" },
-  { mode: "nine-grid", label: "3 x 3", description: "Nine covers" },
-  { mode: "editorial-row", label: "Editorial", description: "Lead mosaic" },
-  { mode: "split-feature", label: "Split", description: "Wide lead" },
-  { mode: "panorama-strip", label: "Panorama", description: "Wide bands" }
-];
 const editableStatuses: ArchiveStatus[] = ["draft", "review", "published", "hidden"];
 
 export function SetWorkspace() {
@@ -136,7 +125,7 @@ export function SetWorkspace() {
                 <span className="admin-list-item__order">{set.order}</span>
                 <span className="admin-list-item__body">
                   <strong>{set.title}</strong>
-                  <small>{set.albumIdsWithOrder.length} albums · {set.layoutMode}</small>
+                  <small>{set.albumIdsWithOrder.length} albums</small>
                 </span>
                 <span className="admin-status" data-status={set.status}>{set.status}</span>
               </button>
@@ -184,25 +173,6 @@ export function SetWorkspace() {
               </Field>
             </div>
 
-            <div className="admin-subsection">
-              <h4>Layout mode</h4>
-              <div className="admin-layout-picker admin-layout-picker--compact">
-                {layoutModes.map((layout) => (
-                  <button
-                    className="admin-layout-card"
-                    data-active={selectedSet.layoutMode === layout.mode ? "true" : undefined}
-                    key={layout.mode}
-                    onClick={() => actions.updateSet(selectedSet.id, { layoutMode: layout.mode })}
-                    type="button"
-                  >
-                    <LayoutGlyph mode={layout.mode} />
-                    <span>{layout.label}</span>
-                    <small>{layout.description}</small>
-                  </button>
-                ))}
-              </div>
-            </div>
-
             <button className="admin-danger-button admin-danger-button--full" onClick={() => void trashSet()} type="button">
               <CircleX aria-hidden />
               Delete set
@@ -214,7 +184,7 @@ export function SetWorkspace() {
               <div>
                 <p className="admin-kicker">Set albums</p>
                 <h2>Album order</h2>
-                <p>The first album becomes featured in fullscreen and split layouts.</p>
+                <p>Albums appear on the homepage in this order.</p>
               </div>
             </div>
 
@@ -249,7 +219,7 @@ export function SetWorkspace() {
           </section>
 
           <section className="admin-column admin-column--preview" aria-label="Set homepage preview">
-            <SetPreview albums={selectedAlbums} layoutMode={selectedSet.layoutMode} setTitle={selectedSet.title} />
+            <SetPreview albums={selectedAlbums} setTitle={selectedSet.title} />
           </section>
         </>
       ) : (
@@ -279,44 +249,27 @@ function Field({ children, label }: { children: React.ReactNode; label: string }
   );
 }
 
-function LayoutGlyph({ mode }: { mode: SetLayoutMode }) {
-  return (
-    <span className="admin-layout-glyph" data-mode={mode} aria-hidden>
-      <i />
-      <i />
-      <i />
-      <i />
-      <i />
-      <i />
-      {mode === "fullscreen-carousel" ? <Check /> : null}
-    </span>
-  );
-}
-
 function SetPreview({
   albums,
-  layoutMode,
   setTitle
 }: {
   albums: LocalArchiveAlbum[];
-  layoutMode: SetLayoutMode;
   setTitle: string;
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewDensity, setPreviewDensity] = useState<"compact" | "spacious">("compact");
-  const layoutTitle = getLayoutLabel(layoutMode);
 
   return (
     <div className="admin-preview admin-preview--column">
       <div className="admin-column-head admin-column-head--tight">
         <div>
           <p className="admin-kicker">Homepage preview</p>
-          <h2>{layoutTitle}</h2>
+          <h2>Album rail</h2>
           <p>{albums.length} albums · all shown</p>
         </div>
         <Sparkles aria-hidden className="admin-section-icon" />
       </div>
-      <SetPreviewCanvas albums={albums} layoutMode={layoutMode} />
+      <SetPreviewCanvas albums={albums} />
       <div className="admin-preview__note">
         <Sparkles aria-hidden />
         Layout continues horizontally when the set has more albums than one screen.
@@ -339,7 +292,7 @@ function SetPreview({
               <div>
                 <p className="admin-kicker">Set preview</p>
                 <h2>{setTitle}</h2>
-                <p>{layoutTitle} · {albums.length} albums</p>
+                <p>{albums.length} albums</p>
               </div>
               <div className="admin-preview-dialog__controls">
                 <div className="admin-density-toggle" aria-label="Preview density">
@@ -368,7 +321,6 @@ function SetPreview({
               <SetPreviewCanvas
                 albums={albums}
                 density={previewDensity}
-                layoutMode={layoutMode}
                 variant="modal"
               />
             </div>
@@ -382,12 +334,10 @@ function SetPreview({
 function SetPreviewCanvas({
   albums,
   density = "compact",
-  layoutMode,
   variant = "column"
 }: {
   albums: LocalArchiveAlbum[];
   density?: "compact" | "spacious";
-  layoutMode: SetLayoutMode;
   variant?: "column" | "modal";
 }) {
   const { archive, previewUrls } = useAdminArchive();
@@ -396,7 +346,7 @@ function SetPreviewCanvas({
     <div
       className="admin-set-preview"
       data-density={density}
-      data-layout={layoutMode}
+      data-layout="six-grid"
       data-variant={variant}
     >
       {albums.map((album, index) => (
@@ -411,10 +361,6 @@ function SetPreviewCanvas({
       {!albums.length ? <div className="admin-inline-empty admin-inline-empty--wide">Preview appears after adding albums.</div> : null}
     </div>
   );
-}
-
-function getLayoutLabel(mode: SetLayoutMode) {
-  return layoutModes.find((layout) => layout.mode === mode)?.label ?? mode.replace(/-/g, " ");
 }
 
 function CoverImage({ url }: { url: string | undefined }) {

@@ -334,7 +334,7 @@ export async function createD1PhotoUpload(
     clientUploadId: string;
     display: { file: File; height: number; width: number };
     height: number;
-    source?: File;
+    source: File;
     sourceBytes: number;
     sourceFileName: string;
     thumb: { file: File; height: number; width: number };
@@ -377,7 +377,7 @@ export async function createD1PhotoUpload(
   const thumbKey = `thumb/${album.id}/${photoId}.jpg`;
   const displayKey = `display/${album.id}/${photoId}.jpg`;
   const publicBaseUrl = env.NEXT_PUBLIC_ASSET_BASE_URL.replace(/\/$/, "");
-  const sourceAsset: ArchiveAsset | undefined = input.source ? {
+  const sourceAsset: ArchiveAsset = {
     id: sourceAssetId,
     photoId,
     version: "sourceJpeg",
@@ -390,7 +390,7 @@ export async function createD1PhotoUpload(
     mimeType: "image/jpeg",
     colorProfile: "preserve",
     createdAt: timestamp
-  } : undefined;
+  };
   const thumbAsset: ArchiveAsset = {
     id: thumbAssetId,
     photoId,
@@ -421,18 +421,15 @@ export async function createD1PhotoUpload(
     colorProfile: "srgb",
     createdAt: timestamp
   };
-  const assets: ArchiveAsset[] = [thumbAsset, displayAsset];
-  if (sourceAsset) assets.push(sourceAsset);
+  const assets: ArchiveAsset[] = [thumbAsset, displayAsset, sourceAsset];
   const storedObjects: Array<{ bucket: CloudflareEnv["PUBLIC_ASSETS"]; key: string }> = [];
 
   try {
-    if (input.source) {
-      await env.PRIVATE_ASSETS.put(sourceKey, input.source, {
-        httpMetadata: { contentType: "image/jpeg" },
-        customMetadata: { albumId: album.id, originalFileName: input.sourceFileName, photoId }
-      });
-      storedObjects.push({ bucket: env.PRIVATE_ASSETS, key: sourceKey });
-    }
+    await env.PRIVATE_ASSETS.put(sourceKey, input.source, {
+      httpMetadata: { contentType: "image/jpeg" },
+      customMetadata: { albumId: album.id, originalFileName: input.sourceFileName, photoId }
+    });
+    storedObjects.push({ bucket: env.PRIVATE_ASSETS, key: sourceKey });
     await env.PUBLIC_ASSETS.put(thumbKey, input.thumb.file, {
       httpMetadata: { cacheControl: "public, max-age=31536000, immutable", contentType: "image/jpeg" },
       customMetadata: { albumId: album.id, photoId, version: "thumb" }
@@ -536,7 +533,7 @@ export async function createD1PhotoUpload(
   return {
     photo,
     albumPhoto: { albumId: album.id, photoId, position, createdAt: timestamp },
-    asset: sourceAsset ?? displayAsset,
+    asset: sourceAsset,
     assets,
     uploadJob: {
       id: uploadId,
@@ -564,15 +561,15 @@ async function readExistingPhotoUpload(db: Database, photoId: string, clientUplo
   const assets = archive.assets.filter((item) => item.photoId === photoId);
   const uploadJob = archive.uploadJobs.find((item) => item.id === `upload-${clientUploadId}`);
   const sourceAsset = assets.find((asset) => asset.version === "sourceJpeg");
-  const previewAsset = assets.find((asset) => asset.version === "display") ?? sourceAsset;
-  if (!photo || !albumPhoto || !previewAsset || !uploadJob) {
+  const previewAsset = assets.find((asset) => asset.version === "display");
+  if (!photo || !albumPhoto || !sourceAsset || !previewAsset || !uploadJob) {
     throw new ArchiveWriteError("upload_incomplete", "The previous upload is incomplete.", 409);
   }
 
   return {
     photo,
     albumPhoto,
-    asset: sourceAsset ?? previewAsset,
+    asset: sourceAsset,
     assets,
     uploadJob: {
       ...uploadJob,

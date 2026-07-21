@@ -11,7 +11,7 @@ export async function GET(
   context: { params: Promise<{ assetId: string }> }
 ) {
   const { env } = getCloudflareContext();
-  const denied = requireAdminAccess(request, env);
+  const denied = await requireAdminAccess(request, env);
   if (denied) return denied;
 
   const { assetId } = await context.params;

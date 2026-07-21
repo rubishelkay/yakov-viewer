@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const { env } = getCloudflareContext();
-  const denied = requireAdminAccess(request, env);
+  const denied = await requireAdminAccess(request, env);
   if (denied) return denied;
 
   try {

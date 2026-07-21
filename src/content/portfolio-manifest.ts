@@ -49,10 +49,7 @@ export type PortfolioAlbum = z.infer<typeof portfolioAlbumSchema>;
 export type PortfolioImage = z.infer<typeof portfolioImageSchema>;
 
 export function getPortfolioAssetUrl(key: string) {
-  const defaultBaseUrl =
-    process.env.NODE_ENV === "production"
-      ? "https://assets.yakov.shmol.cc"
-      : "http://127.0.0.1:4173";
+  const defaultBaseUrl = "https://assets.yakov.shmol.cc";
   const baseUrl =
     process.env.NEXT_PUBLIC_ASSET_BASE_URL?.replace(/\/$/, "") ??
     defaultBaseUrl;

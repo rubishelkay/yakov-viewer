@@ -1,18 +1,11 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 
-import { adminArchive } from "@/admin/mock-data";
 import { PortfolioTagPage } from "@/components/portfolio/PortfolioTagPage";
+import { getPublicAlbumsForTag, getPublicTagBySlug, getPublicTags } from "@/lib/portfolio";
 
 export function generateStaticParams() {
-  const publicTagIds = new Set(
-    adminArchive.albums
-      .filter((album) => album.status === "published" && !album.isDemo)
-      .flatMap((album) => album.tagIds)
-  );
-
-  return adminArchive.tags
-    .filter((tag) => publicTagIds.has(tag.id))
-    .map((tag) => ({ slug: tag.slug }));
+  return getPublicTags().map((tag) => ({ slug: tag.slug }));
 }
 
 export async function generateMetadata({
@@ -21,7 +14,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const tag = adminArchive.tags.find((item) => item.slug === slug);
+  const tag = getPublicTagBySlug(slug);
 
   return {
     title: tag?.label ?? "Tag",
@@ -31,5 +24,8 @@ export async function generateMetadata({
 
 export default async function TagPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  return <PortfolioTagPage slug={slug} />;
+  const tag = getPublicTagBySlug(slug);
+  if (!tag) notFound();
+
+  return <PortfolioTagPage albums={getPublicAlbumsForTag(slug)} tag={tag} />;
 }

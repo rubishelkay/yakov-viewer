@@ -1,47 +1,52 @@
 # Yakov Shmol Design System
 
-## Direction
+## Current Contract
 
-The public site is a dark-gallery-first photo archive: quiet, spacious, image-led, and restrained. Linear-like precision and Spotify-like dark media staging are inspiration only; the site must not copy either brand.
+The current Fable-derived frontend is the only public visual source of truth. Earlier
+Apple, Spotify, and Linear references were useful during exploration but are not active
+implementation requirements. New work should preserve the accepted site's quiet,
+image-led character and refine it in small browser-tested steps.
 
-Detailed reference synthesis lives in `docs/yakov-design-synthesis.md`.
+## Public Surface
 
-## Tokens
+- minimal fixed header with `Yakov Shmol`, random-photo action, and theme toggle;
+- full-viewport photographic hero on the homepage;
+- three-column 3:2 album index on desktop, responsive down to one column;
+- album viewer modes `S`, `M`, and `L`;
+- uncropped fullscreen viewer with keyboard, drag, swipe, pinch, and click zoom;
+- compact album/tag metadata and no decorative product copy;
+- photographs have sharp corners unless a specific cropped UI preview needs framing.
 
-Core tokens live in `src/styles/tokens.css`:
+The public routes are `/`, `/albums`, `/albums/[slug]`, `/tags/[slug]`, and `/about`.
 
-- colors: `--bg`, `--bg-muted`, `--bg-elevated`, `--text`, `--text-muted`, `--border`, `--accent`;
-- radii: `--radius-xs` through `--radius-xl`, plus `--radius-pill`;
-- spacing: `--space-1` through `--space-20`;
-- motion: `--ease-standard`, `--duration-*`;
-- fonts: system stacks through `--font-sans` and `--font-display`.
+## Admin Surface
 
-## Theme
+The admin is desktop-first and uses a dense left-to-right column browser:
 
-Default behavior follows the user's system theme. The manual toggle cycles `system -> dark -> light` and stores the override in `localStorage` as `yakov-theme`.
+- persistent navigation rail;
+- entity list;
+- selected entity settings;
+- album/set content;
+- selected photo inspector;
+- horizontal scrolling on narrow screens.
 
-## Layout
+The admin uses quiet separators and compact controls. Photo contact sheets stay visual;
+detailed actions live in the inspector. Sets have one ordered album-rail presentation,
+not a layout-mode picker.
 
-- Use `.page-shell` for wide photo surfaces.
-- Use `.text-shell` for text-heavy pages.
-- Use nearly full viewport width for archive and film grids.
-- Keep photo surfaces visually dominant; UI chrome should stay compact.
+## Tokens And Theme
 
-## Components
+Shared tokens live in `src/styles/tokens.css`. Public styles live in
+`src/styles/global.css`; admin styles are isolated in `src/styles/admin.css`.
 
-- Header: translucent sticky pill, minimal nav, theme toggle.
-- Hero: horizontal fullscreen-feeling photo slides with lower-corner copy.
-- Film cards: repeated album entries with strong cover images.
-- Album viewer: vertical scroll first, contact sheet toggle second.
-- Lightbox: keyboard accessible with arrows, Esc, and `i` for info.
+The public theme follows the system by default. The header toggle cycles
+`system -> dark -> light` and stores an explicit override in `localStorage`.
 
-## Admin Direction
+## Image Rules
 
-The first admin is desktop-only and should feel closer to a precise Linear-like product tool than to a marketing site.
-
-- Dashboard first.
-- Compact side navigation.
-- Dense album/photo management surfaces.
-- Upload queue and processing states visible.
-- Settings controlled through toggles, selects, and numeric inputs.
-- Photo previews remain central; chrome stays quiet.
+- lists and contact sheets use stored thumbnails;
+- normal public viewing uses stored display JPEGs;
+- fullscreen fit never crops the photograph;
+- grids never request the private source JPEG;
+- dimensions are always known to avoid layout shift;
+- loaders, focus states, reduced motion, and keyboard controls remain functional.

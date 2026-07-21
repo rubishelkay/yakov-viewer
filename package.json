@@ -10,14 +10,15 @@
     "cf-typegen": "wrangler types --env-interface CloudflareEnv --include-runtime=false cloudflare-env.d.ts",
     "d1:migrate:local": "wrangler d1 migrations apply yakov_archive --local",
     "validate:content": "node --import tsx scripts/validate-content.ts",
-    "admin:preview-cache": "node --import tsx scripts/generate-admin-preview-cache.ts",
+    "test:admin-auth": "node --conditions=react-server --import tsx --test tests/admin-auth.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
     "build": "next build",
-    "check": "pnpm validate:content && pnpm typecheck && pnpm lint && pnpm build"
+    "check": "pnpm validate:content && pnpm typecheck && pnpm test:admin-auth && pnpm lint && pnpm build"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.20.1",
+    "jose": "^6.2.3",
     "lucide-react": "latest",
     "next": "latest",
     "react": "latest",

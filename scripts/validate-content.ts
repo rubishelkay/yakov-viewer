@@ -1,9 +1,8 @@
-import { collections, films, photos, validateContent } from "../src/content";
 import { assertAdminArchiveRelations } from "../src/admin/archive-invariants";
 import { adminArchive } from "../src/admin/mock-data";
 import { portfolioManifest } from "../src/content/portfolio-manifest";
+import { getPublicAlbumBySlug, getPublicAlbums, getPublicTags } from "../src/lib/portfolio";
 
-validateContent();
 assertAdminArchiveRelations(adminArchive);
 
 const sharedPhotoFixture = structuredClone(adminArchive);
@@ -23,23 +22,36 @@ sharedPhotoFixture.albumPhotos.push({
 });
 assertAdminArchiveRelations(sharedPhotoFixture);
 
-const publishedPhotos = photos.filter((photo) => photo.visibility === "published").length;
-const downloadablePhotos = photos.filter((photo) => photo.rights.downloadAllowed).length;
-const portfolioPhotoCount = portfolioManifest.albums.reduce(
+const publicAlbums = getPublicAlbums();
+const publicTags = getPublicTags();
+const publicPhotoCount = publicAlbums.reduce((sum, album) => sum + album.photoCount, 0);
+const manifestPhotoCount = portfolioManifest.albums.reduce(
   (sum, album) => sum + album.images.length,
   0
 );
 
+if (publicAlbums.length !== portfolioManifest.albums.length) {
+  throw new Error("Public album view does not match the approved portfolio manifest.");
+}
+
+if (publicPhotoCount !== manifestPhotoCount) {
+  throw new Error("Public photo count does not match the approved portfolio manifest.");
+}
+
+for (const album of publicAlbums) {
+  const detail = getPublicAlbumBySlug(album.slug);
+  if (!detail || detail.photos.length !== album.photoCount) {
+    throw new Error(`Public album detail is incomplete: ${album.slug}`);
+  }
+}
+
 console.log(
   [
     "Content validation passed",
-    `${films.length} film(s)`,
-    `${photos.length} photo(s), ${publishedPhotos} published`,
-    `${collections.length} collection(s)`,
-    `${downloadablePhotos} downloadable photo(s)`,
-    `${portfolioManifest.albums.length} imported portfolio album(s)`,
-    `${portfolioPhotoCount} imported portfolio photo(s)`,
-    `${adminArchive.albumPhotos.length} canonical album-photo membership(s)`,
+    `${publicAlbums.length} public portfolio album(s)`,
+    `${publicPhotoCount} public portfolio photo(s)`,
+    `${publicTags.length} public tag(s)`,
+    `${adminArchive.albumPhotos.length} admin album-photo membership(s)`,
     "Multi-album photo fixture passed without duplicating photo or asset records"
   ].join("\n")
 );

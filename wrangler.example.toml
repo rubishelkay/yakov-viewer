@@ -28,6 +28,8 @@ binding = "IMAGE_PROCESSING"
 queue = "yakov-image-processing"
 
 [vars]
+ACCESS_APP_AUD = "replace-with-access-application-aud"
+ACCESS_TEAM_DOMAIN = "https://replace-with-team-name.cloudflareaccess.com"
 ADMIN_ACCESS_ENABLED = "false"
 ADMIN_EMAIL = "Jacobjshmol@gmail.com"
 NEXT_PUBLIC_SITE_URL = "https://yakov.shmol.cc"

@@ -62,7 +62,6 @@ subtitle
 description
 status
 order
-layoutMode
 coverAssetId
 albumIdsWithOrder
 createdAt
@@ -71,19 +70,10 @@ publishedAt
 deletedAt
 ```
 
-Recommended set layout modes:
-
-```txt
-fullscreen-carousel / Hero rail: horizontal 3:2 album covers in a scrolling hero rail
-triptych: three horizontal album covers
-six-grid: 3 x 2 horizontal cover grid
-nine-grid: 3 x 3 horizontal cover wall
-editorial-row: lead horizontal mosaic with supporting covers
-split-feature: wide lead cover with smaller supporting covers
-panorama-strip: wider 2:1 bands for panoramic or cinematic sets
-```
-
-The public homepage should scroll through sets. The admin should allow creating, editing, reordering, publishing, hiding, and deleting sets.
+The public homepage should scroll through ordered sets using one accepted album-rail
+presentation. The admin allows creating, editing, reordering, publishing, hiding, and
+deleting sets. The legacy `layout_mode` D1 column remains temporarily for migration
+compatibility, but it is not an active product setting.
 
 If a set is deleted, its albums are not deleted. The album membership is removed and the albums become unassigned or remain in any other sets they already belong to.
 

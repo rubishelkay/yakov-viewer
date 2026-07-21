@@ -107,9 +107,11 @@ Current status:
 - The technical OpenNext Worker is live and uses a dedicated R2 incremental cache.
 - `assets.yakov.shmol.cc` is active, and `yakov.shmol.cc/*` now routes to the verified
   OpenNext Worker. The old Pages project remains detached but available for rollback.
-- External admin access stays disabled until Cloudflare Access is configured. Production
-  migration `0003_upload_job_photo.sql` and a new deploy are still required before the
-  first real remote upload.
+- Cloudflare Access now protects both admin page and API path families for exactly the
+  owner account. Migration `0003_upload_job_photo.sql` is applied and Worker version
+  `652010be-06b1-49e6-a051-6a1a878be02a` runs with server-side Access JWT validation.
+  Owner consent and protected archive-read QA pass; a separately confirmed smoke upload
+  remains before real use.
 - Album display order can now be reversed with one album-level setting; membership
   positions stay canonical and are not destructively renumbered.
 - Public viewing polish now includes stable header controls, image loading feedback,
@@ -128,6 +130,10 @@ Current status:
   rendered photo, and the close control no longer receives forced initial focus.
   Production D1 migration `0002_album_photo_order.sql` remains applied and its
   foreign-key check is clean.
+- The July 21 protected-admin rollout is live as Worker version
+  `652010be-06b1-49e6-a051-6a1a878be02a`: Access intercepts anonymous admin requests,
+  the Worker validates owner JWTs, and migration `0003_upload_job_photo.sql` is applied
+  with a clean foreign-key check.
 
 ## Immediate Roadmap
 
@@ -250,7 +256,7 @@ Minimum flow:
 create album
   -> send JPEG to the protected Worker endpoint
   -> Worker writes thumb/display to public R2
-  -> Worker optionally writes selected source JPEGs to private R2
+  -> Worker writes every source JPEG unchanged to private R2
   -> Worker writes Photo, AlbumPhoto, Asset, and UploadJob rows to D1
   -> admin reloads the archive through the Cloudflare API adapter
 ```
@@ -258,8 +264,8 @@ create album
 The first implementation intentionally uses a direct multipart request through the
 protected Worker. This is simpler to validate end to end. Presigned/direct-to-R2
 uploads can replace it later if file sizes or concurrent uploads require that change.
-The current ingest creates real `thumb` and `display` JPEGs in the browser. It preserves
-the unchanged `sourceJpeg` only when the owner enables retention. It never creates
+The current ingest creates real `thumb` and `display` JPEGs in the browser and preserves
+the unchanged `sourceJpeg` for every upload. It never creates
 placeholder derivative records.
 
 Immediate implementation order:
@@ -267,7 +273,7 @@ Immediate implementation order:
 1. Completed locally: typed D1 queries and `GET /api/admin/archive`.
 2. Completed locally: album creation against D1.
 3. Completed locally: ordered batch JPEG upload with real `thumb`/`display` in public
-   R2, optional unchanged `sourceJpeg` in private R2, transactional D1 writes,
+   R2, mandatory unchanged `sourceJpeg` in private R2, transactional D1 writes,
    compensating R2 deletion, and idempotent retry.
 4. Completed locally: separate D1/R2-backed `Cloud upload` workspace and typed client
    boundary for archive reads, album creation, JPEG upload, and protected asset reads.

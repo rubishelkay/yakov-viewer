@@ -1,4 +1,4 @@
-import { photos as publicSeedPhotos } from "@/content/seed";
+import { getPortfolioAssetUrl, portfolioManifest } from "@/content/portfolio-manifest";
 
 import {
   adminArchiveSchema,
@@ -23,6 +23,7 @@ import {
 
 const now = "2026-05-12T10:00:00+07:00";
 const later = "2026-05-19T10:00:00+07:00";
+const demoSourceImages = portfolioManifest.albums.flatMap((album) => album.images);
 
 const baseTags: ArchiveTag[] = [
   makeTag("tag-film", "film", "Film", "both"),
@@ -209,7 +210,7 @@ const demoAlbums: ArchiveAlbum[] = albumSeeds.map((album, index) => {
 const demoPhotos: ArchivePhoto[] = albumSeeds.flatMap((album, albumIndex) =>
   photoPositionsForAlbum(album).map((position) => {
     const sourceIndex = album.id === "album-film-073" ? position - 1 : albumIndex * 3 + position - 1;
-    const source = publicSeedPhotos[sourceIndex % publicSeedPhotos.length];
+    const source = demoSourceImages[sourceIndex % demoSourceImages.length];
     const photoId = photoIdFor(album.id, position);
     const directTagIds = position === 1 ? ["tag-selected"] : position === 2 ? ["tag-review"] : [];
 
@@ -232,7 +233,7 @@ const demoPhotos: ArchivePhoto[] = albumSeeds.flatMap((album, albumIndex) =>
       locationText: album.locationText,
       width: source.width,
       height: source.height,
-      dominantColor: source.dominantColor,
+      dominantColor: "#111111",
       createdAt: now,
       updatedAt: now,
       publishedAt: album.status === "published" ? now : undefined,
@@ -251,8 +252,8 @@ const demoAlbumPhotos: ArchiveAlbumPhoto[] = albumSeeds.flatMap((album) =>
 );
 
 const demoAssets: ArchiveAsset[] = demoPhotos.flatMap((photo, index) => {
-  const source = publicSeedPhotos[index % publicSeedPhotos.length];
-  const publicUrl = `${source.r2.assetBaseUrl}/${source.r2.originalKey}`;
+  const source = demoSourceImages[index % demoSourceImages.length];
+  const publicUrl = getPortfolioAssetUrl(source.thumbKey);
 
   return [
     makeAsset(photo, "thumb", "public", publicUrl, 480, 320, 84000),
@@ -447,7 +448,7 @@ function makeUploadJob(
 
 function photoPositionsForAlbum(album: AlbumSeed) {
   return Array.from(
-    { length: album.id === "album-film-073" ? publicSeedPhotos.length : 3 },
+    { length: album.id === "album-film-073" ? 36 : 3 },
     (_, index) => index + 1
   );
 }

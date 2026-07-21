@@ -49,17 +49,13 @@ export async function uploadCloudflareJpeg(
     display: { blob: Blob; height: number; width: number };
     file: File;
     height: number;
-    retainSource: boolean;
     thumb: { blob: Blob; height: number; width: number };
     title?: string;
     width: number;
   }
 ): Promise<UploadPhotoResult> {
   const body = new FormData();
-  body.set("sourceFileName", input.file.name);
-  body.set("sourceBytes", String(input.file.size));
-  body.set("retainSource", String(input.retainSource));
-  if (input.retainSource) body.set("file", input.file);
+  body.set("file", input.file);
   body.set("width", String(input.width));
   body.set("height", String(input.height));
   body.set("clientUploadId", input.clientUploadId);

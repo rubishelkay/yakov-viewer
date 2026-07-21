@@ -1,18 +1,13 @@
-"use client";
-
-import { useAdminArchive } from "@/admin/admin-state";
 import { PortfolioAlbumCard } from "@/components/portfolio/PortfolioAlbumCard";
-import {
-  getPublicAlbumsForTag,
-  getPublicTagBySlug
-} from "@/lib/portfolio";
+import type { PublicAlbumSummary, PublicTag } from "@/lib/portfolio";
 
-export function PortfolioTagPage({ slug }: { slug: string }) {
-  const { archive, previewUrls } = useAdminArchive();
-  const tag = getPublicTagBySlug(archive, slug);
-  const albums = tag ? getPublicAlbumsForTag(archive, tag.id) : [];
-
-  if (!tag) return <main className="portfolio-empty">Tag is not published.</main>;
+export function PortfolioTagPage({
+  albums,
+  tag
+}: {
+  albums: PublicAlbumSummary[];
+  tag: PublicTag;
+}) {
 
   return (
     <main className="portfolio-tag-page">
@@ -22,12 +17,7 @@ export function PortfolioTagPage({ slug }: { slug: string }) {
       </header>
       <div className="portfolio-album-grid">
         {albums.map((album) => (
-          <PortfolioAlbumCard
-            album={album}
-            archive={archive}
-            key={album.id}
-            previewUrls={previewUrls}
-          />
+          <PortfolioAlbumCard album={album} key={album.id} />
         ))}
       </div>
     </main>

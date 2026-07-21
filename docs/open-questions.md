@@ -17,14 +17,16 @@ These are the current questions to resolve before implementing the admin/backend
 11. The first integrated public frontend stays intentionally minimal; All Photos and public downloads come later.
 12. Typical uploads are 2000 px JPEGs around 3-5 MB; targets are thumb <=300 KB and display around 1 MB.
 13. A photo inherits effective public tags from every published album membership, plus its direct photo tags.
+14. Every admin-uploaded JPEG is preserved unchanged as a private `sourceJpeg`.
+15. Sets use one ordered album-rail presentation; the old per-set layout picker is removed.
+16. Initial admin identity uses Cloudflare's built-in account IdP and exact owner email.
+17. The current public route set is `/`, `/albums`, `/albums/[slug]`, `/tags/[slug]`, and `/about`.
 
 ## Sets And Tags
 
 1. Should public sets be edited only manually, or can the admin later auto-build sets from tag queries?
-2. Should set layout modes be chosen per set: hero, album grid, editorial row, compact?
-3. Should the public interface show set labels only when needed, keeping navigation mostly visual and minimal?
-4. Should album tags and photo tags share one dictionary table with different scopes, or use two separate dictionaries?
-5. Should photo tags be visible publicly, or admin-only in the first version?
+2. Should the public interface show set labels only when needed, keeping navigation mostly visual and minimal?
+3. Should photo tags be visible publicly, or admin-only in the first version?
 
 ## Albums
 

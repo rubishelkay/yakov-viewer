@@ -1,2 +1,5 @@
 # Local OpenNext/workerd preview only. Never configure this variable in production.
+ADMIN_ACCESS_ENABLED=false
+ADMIN_RUNTIME_ENV=local
 ADMIN_LOCAL_BYPASS=true
+ADMIN_EMAIL=Jacobjshmol@gmail.com

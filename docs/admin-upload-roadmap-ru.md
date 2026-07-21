@@ -1,132 +1,96 @@
 # Панель управления: текущий статус и ближайший путь
 
-## Главное решение
+Обновлено: 22 июля 2026.
 
-Публичный фронтенд принят и считается визуально замороженным. Следующий приоритет —
-настоящая загрузка альбомов через Cloudflare.
+## Где мы сейчас
 
-В админке временно существуют два явно разделённых режима:
+Публичный Fable-derived frontend принят и отделен от админских моков и `localStorage`.
+Он читает только 9 реальных опубликованных альбомов из portfolio manifest. В production
+уже загружены 312 фото и по две публичные версии каждого изображения.
 
-- `/admin/albums` — локальная UX-песочница. Метаданные живут в `localStorage`, preview
-  живут в IndexedDB. Этот экран подходит для тестирования интерфейса, но не для
-  настоящего архива.
-- `/admin/ingest` (`Cloud upload`) — Cloudflare-backed загрузчик. Он читает D1, создаёт
-  draft-альбомы и пишет JPEG-версии в R2. Этот экран является основой для реальной
-  загрузки.
+Админка пока имеет два источника данных:
 
-Нельзя считать локальные Albums и Cloud upload одной базой: это намеренно разные
-источники данных, пока для всех редакторов не реализованы Cloudflare mutations.
+- `/admin/albums`, `/admin/photos`, `/admin/sets`, `/admin/tags`, `/admin/bin` -
+  локальная UX-песочница на `localStorage` + IndexedDB;
+- `/admin/ingest` - настоящий Cloudflare flow на D1 + R2.
 
-## Что уже работает
+Локальная песочница нужна для интерфейсных тестов, но не является постоянным архивом.
 
-Локальный OpenNext Worker проверен на настоящих JPEG:
+## Реальная загрузка
+
+Первый Cloudflare upload принимает JPEG до 20 MiB и делает:
 
 ```txt
-create draft album
-  -> select several JPEGs
-  -> keep selected file order
-  -> create thumb in browser (target <= 300 KB)
-  -> create display in browser (target about 1 MB)
-  -> upload thumb/display to public R2
-  -> optionally preserve selected source JPEGs in private R2
-  -> write Photo, AlbumPhoto, two or three Asset rows and UploadJob to D1
-  -> reload and see the album/photo count from D1
+sourceJpeg -> private R2, без изменения
+thumb      -> browser-generated public JPEG, до 300 KB
+display    -> browser-generated public JPEG, около 1 MB, максимум 2 MiB
+metadata   -> Photo + AlbumPhoto + Asset + UploadJob в D1
 ```
 
-Retry uses a stable client upload ID. Repeating the same request returns the existing
-photo instead of creating a duplicate.
+Source обязателен для каждой новой фотографии. Retry использует стабильный
+`clientUploadId`, поэтому повтор завершенного запроса не создает дубликат. Порядок
+выбранных файлов становится начальным порядком альбома.
 
-Verified sample result on 2026-07-19:
+Админка считает общий размер записанных assets и показывает предупреждение после
+рабочего порога 8 GiB. Это предупреждение, а не жесткий лимит: владелец согласен при
+необходимости перейти на платное хранение или заранее готовить source JPEG по 3-5 MB.
 
-- two JPEGs retained positions 1 and 2;
-- each photo created `thumb`, `display`, and `sourceJpeg` assets;
-- thumbs were 36-68 KB;
-- display files were 473-809 KB;
-- source JPEGs stayed unchanged and private;
-- no uploaded image was written into Git.
+## Что уже готово перед production upload
 
-That sample verified the optional source-retention path. Production defaults to web
-derivatives only. The `Keep source JPEG in private R2` checkbox is off unless the owner
-explicitly chooses it for a selected upload.
-
-## Free-plan storage rule
-
-The first production archive must remain inside the 10 GB-month R2 Standard free tier.
-For an expected 100 film albums (about 3,600 photos), retaining every 3-5 MB input JPEG
-would consume roughly 11-18 GB before derivatives. The default upload therefore stores:
-
-- public `thumb`, target no more than 300 KB;
-- public `display`, target around 1 MB and normally smaller;
-- private `sourceJpeg` only when its checkbox is enabled.
-
-Full originals remain on external owner storage, such as Google Drive. The data model
-still supports optional `sourceJpeg` and future `master` assets without duplicating the
-photo record.
-
-## Почему production-админка ещё не готова для настоящего альбома
-
-Production currently keeps external admin access disabled. Before the first real
-upload we still need to:
-
-1. Configure Cloudflare Access for `/admin/*` and `/api/admin/*` with owner email
+1. Cloudflare Zero Trust Access защищает `/admin*` и `/api/admin*`.
+2. Встроенный Cloudflare account identity provider разрешает только
    `Jacobjshmol@gmail.com`.
-2. Apply production migration `0003_upload_job_photo.sql`.
-3. Deploy the verified Worker with `ADMIN_ACCESS_ENABLED=true`.
-4. Run one small production smoke upload with source retention off and verify D1,
-   public R2 and reload.
+3. Access team domain и application AUD записаны в Worker variables.
+4. Production migration `0003_upload_job_photo.sql` применена.
+5. Worker version `652010be-06b1-49e6-a051-6a1a878be02a` развернут с
+   `ADMIN_ACCESS_ENABLED=true`.
+6. Публичные маршруты отвечают `200`, а анонимные admin-запросы перехватываются Access.
+7. Owner-вход выполнен; production `/admin/ingest` загружает архив из D1 через
+   защищенный API.
 
-Until those four steps are complete, do not use the local Albums screen as permanent
-storage and do not upload a real album to production.
+Перед реальным наполнением остается отдельно подтвержденный маленький smoke upload с
+проверкой private R2, public R2 и D1.
 
-## First production upload scope
+## Следующие milestones
 
-The first remote version intentionally supports only safe ingest:
+### A. Protected cloud ingest
 
-- create a draft album;
-- select many JPEGs in the desired order;
-- process and upload sequentially;
-- choose source retention only for exceptional files;
-- see progress and retry failed files;
-- reload and confirm stored photo count.
+- Access, migration, deploy;
+- один тестовый JPEG;
+- затем тестовый альбом на 30-40 JPEG;
+- проверка reload, порядка, размеров и отсутствия файлов в Git.
 
-Publishing, title/subtitle editing, tags, sets, cover editing, reorder after upload,
-hide/delete/bin and public-site synchronization are the next Cloudflare mutation pass.
-Albums stay draft until that pass is ready.
+### B. Cloudflare mutations
 
-## Next milestones
+- edit title/subtitle/status;
+- теги альбома и прямые теги фото;
+- covers;
+- forward/reverse и ручной порядок;
+- hide/show;
+- Delete -> Bin, restore, purge;
+- set membership и порядок.
 
-### A. Activate protected Cloud upload
+После этого локальный repository заменяется D1/R2 adapter целиком, без смешивания
+локальных и облачных сохранений на одном экране.
 
-- Cloudflare Access;
-- production migration 0003;
-- deploy;
-- one small smoke album;
-- then a 30-40 photo test album.
+### C. Public site from D1
 
-### B. Move essential album editing to Cloudflare
+- тот же компактный public view model;
+- только `published`, без hidden/bin/deleted;
+- только публичные `thumb`/`display` URLs;
+- никаких private keys, source assets, GPS или чувствительного EXIF;
+- принятый дизайн остается неизменным.
 
-- edit album title/subtitle/status;
-- tags with inherited photo tags;
-- cover selection;
-- forward/reverse display and manual order;
-- hide/show photo;
-- delete to Bin, restore and purge;
-- set membership and set order.
+### D. GitHub automatic deploy
 
-After this milestone, `/admin/albums` can switch from the local repository to D1/R2 as
-one coherent unit.
+- GitHub branch/production policy;
+- Cloudflare Workers Builds;
+- проверки перед автодеплоем;
+- rollback документирован.
 
-### C. Make the public frontend read Cloudflare archive data
+## Практическое правило
 
-- published sets and albums only;
-- public `thumb`/`display` URLs only;
-- no source keys or private metadata;
-- cache invalidation after publish;
-- existing accepted visual design remains unchanged.
-
-## Operating rule
-
-For real content, the final workflow will be the remote protected admin. Local admin
-remains a development sandbox and recovery/testing tool. Cloudflare changes are made
-through Wrangler/API after a short pre-action brief; secrets and image files stay out
-of Git.
+Настоящие новые альбомы загружаются только через защищенный remote admin после smoke
+test. Локальная админка остается средой разработки. Перед Access, migration, deploy или
+production upload Codex дает короткий бриф с точными именами ресурсов и ожидаемым
+эффектом. Секреты и изображения никогда не попадают в Git.

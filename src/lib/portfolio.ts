@@ -1,148 +1,141 @@
-import {
-  getAlbumCoverUrlFromArchive,
-  getPhotoDisplayUrlFromArchive,
-  getPhotoThumbnailUrlFromArchive,
-  getPhotosForAlbumFromArchive,
-  type LocalAdminArchive,
-  type LocalArchiveAlbum,
-  type LocalArchivePhoto,
-  type LocalArchiveTag
-} from "@/admin/admin-state";
+import { getPortfolioAssetUrl, portfolioManifest } from "@/content/portfolio-manifest";
 
-export type PreviewUrls = Record<string, string>;
+export type PublicTag = {
+  label: string;
+  slug: string;
+};
 
-export function getPublicAlbums(archive: LocalAdminArchive) {
-  const publishedAlbums = archive.albums.filter(isPublicAlbum);
-  const albumById = new Map(publishedAlbums.map((album) => [album.id, album]));
-  const orderedIds = archive.sets
-    .filter((set) => set.status === "published")
-    .sort((a, b) => a.order - b.order)
-    .flatMap((set) =>
-      [...set.albumIdsWithOrder]
-        .sort((a, b) => a.position - b.position)
-        .map((reference) => reference.albumId)
-    );
-  const seen = new Set<string>();
-  const ordered = orderedIds
-    .map((albumId) => albumById.get(albumId))
-    .filter((album): album is LocalArchiveAlbum => Boolean(album))
-    .filter((album) => {
-      if (seen.has(album.id)) return false;
-      seen.add(album.id);
-      return true;
-    });
-  const ungrouped = publishedAlbums
-    .filter((album) => !seen.has(album.id))
-    .sort((a, b) => a.sortOrder - b.sortOrder);
+export type PublicAlbumSummary = {
+  coverUrl: string;
+  id: string;
+  kind: "film" | "digital";
+  photoCount: number;
+  slug: string;
+  subtitle: string;
+  subtitleTags: Array<{ label: string; slug?: string }>;
+  tagSlugs: string[];
+  title: string;
+};
 
-  return [...ordered, ...ungrouped];
-}
+export type PublicPhoto = {
+  displayUrl: string;
+  height: number;
+  id: string;
+  thumbUrl: string;
+  title: string;
+  width: number;
+};
 
-export function getHomepageAlbums(archive: LocalAdminArchive) {
-  const publishedAlbums = new Map(
-    archive.albums
-      .filter(isPublicAlbum)
-      .map((album) => [album.id, album])
-  );
-  const seen = new Set<string>();
+export type PublicAlbumDetail = PublicAlbumSummary & {
+  photos: PublicPhoto[];
+};
 
-  return archive.sets
-    .filter((set) => set.status === "published")
-    .sort((a, b) => a.order - b.order)
-    .flatMap((set) =>
-      [...set.albumIdsWithOrder]
-        .sort((a, b) => a.position - b.position)
-        .map((reference) => publishedAlbums.get(reference.albumId))
-    )
-    .filter((album): album is LocalArchiveAlbum => Boolean(album))
-    .filter((album) => {
-      if (seen.has(album.id)) return false;
-      seen.add(album.id);
-      return true;
-    });
-}
+const orderedManifestAlbums = [...portfolioManifest.albums].sort((a, b) => a.order - b.order);
 
-export function getHeroAlbums(archive: LocalAdminArchive) {
-  const albumById = new Map(archive.albums.filter(isPublicAlbum).map((album) => [album.id, album]));
-  const heroSet = archive.sets
-    .filter((set) => set.status === "published")
-    .sort((a, b) => a.order - b.order)[0];
+const albumSummaries = orderedManifestAlbums.map<PublicAlbumSummary>((album) => {
+  const tagLabels = getAlbumTagLabels(album);
+  const tagSlugs = tagLabels.map(slugify);
+  const coverImage =
+    album.images.find((image) => image.srcKey === stripLeadingSlash(album.coverImage)) ??
+    album.images[0];
 
-  if (!heroSet) return getPublicAlbums(archive).slice(0, 5);
-
-  return [...heroSet.albumIdsWithOrder]
-    .sort((a, b) => a.position - b.position)
-    .map((reference) => albumById.get(reference.albumId))
-    .filter((album): album is LocalArchiveAlbum => Boolean(album))
-    .slice(0, 5);
-}
-
-export function getPublicAlbumBySlug(archive: LocalAdminArchive, slug: string) {
-  return archive.albums.find(
-    (album) => album.slug === slug && isPublicAlbum(album)
-  );
-}
-
-export function getPublicPhotosForAlbum(archive: LocalAdminArchive, albumId: string) {
-  return getPhotosForAlbumFromArchive(archive, albumId).filter(
-    (photo) => photo.status === "published"
-  );
-}
-
-export function getPublicTagBySlug(archive: LocalAdminArchive, slug: string) {
-  return archive.tags.find((tag) => tag.slug === slug);
-}
-
-export function getPublicAlbumsForTag(archive: LocalAdminArchive, tagId: string) {
-  return getPublicAlbums(archive).filter(
-    (album) =>
-      album.tagIds.includes(tagId) ||
-      getPublicPhotosForAlbum(archive, album.id).some((photo) => photo.tagIds.includes(tagId))
-  );
-}
-
-export function getAlbumSubtitleTags(archive: LocalAdminArchive, album: LocalArchiveAlbum) {
-  const tags = album.tagIds
-    .map((tagId) => archive.tags.find((tag) => tag.id === tagId))
-    .filter((tag): tag is LocalArchiveTag => Boolean(tag));
-
-  return album.subtitle
-    .split(",")
-    .map((label) => label.trim())
-    .filter(Boolean)
-    .map((label) => ({
-      label,
-      tag: tags.find((tag) => normalizeTagLabel(tag.label) === normalizeTagLabel(label))
-    }));
-}
-
-export function getAlbumCover(
-  archive: LocalAdminArchive,
-  previewUrls: PreviewUrls,
-  album: LocalArchiveAlbum
-) {
-  return getAlbumCoverUrlFromArchive(archive, previewUrls, album, "landscape");
-}
-
-export function getPortfolioPhotoSources(
-  archive: LocalAdminArchive,
-  previewUrls: PreviewUrls,
-  photo: LocalArchivePhoto
-) {
   return {
-    display: getPhotoDisplayUrlFromArchive(archive, previewUrls, photo),
-    thumb: getPhotoThumbnailUrlFromArchive(archive, previewUrls, photo)
+    coverUrl: getPortfolioAssetUrl(coverImage.thumbKey),
+    id: album.id,
+    kind: album.type,
+    photoCount: album.images.length,
+    slug: album.slug,
+    subtitle: album.subtitle,
+    subtitleTags: album.subtitle
+      .split(",")
+      .map((label) => label.trim())
+      .filter(Boolean)
+      .map((label) => {
+        const slug = slugify(label);
+        return tagSlugs.includes(slug) ? { label, slug } : { label };
+      }),
+    tagSlugs,
+    title: album.title
+  };
+});
+
+const summaryBySlug = new Map(albumSummaries.map((album) => [album.slug, album]));
+
+export function getPublicAlbums(): PublicAlbumSummary[] {
+  return albumSummaries;
+}
+
+export function getHomepageAlbums(): PublicAlbumSummary[] {
+  return albumSummaries;
+}
+
+export function getHeroAlbums(): PublicAlbumSummary[] {
+  return albumSummaries.slice(0, 5);
+}
+
+export function getPublicAlbumBySlug(slug: string): PublicAlbumDetail | undefined {
+  const manifestAlbum = orderedManifestAlbums.find((album) => album.slug === slug);
+  const summary = summaryBySlug.get(slug);
+
+  if (!manifestAlbum || !summary) return undefined;
+
+  return {
+    ...summary,
+    photos: [...manifestAlbum.images]
+      .sort((a, b) => a.position - b.position)
+      .map((image) => ({
+        displayUrl: getPortfolioAssetUrl(image.srcKey),
+        height: image.height,
+        id: image.id,
+        thumbUrl: getPortfolioAssetUrl(image.thumbKey),
+        title: image.alt,
+        width: image.width
+      }))
   };
 }
 
-export function isFilmAlbum(album: LocalArchiveAlbum) {
-  return album.tagIds.includes("tag-film") || album.tagIds.includes("tag-film-photography");
+export function getPublicTags(): PublicTag[] {
+  const labelsBySlug = new Map<string, string>();
+
+  for (const album of orderedManifestAlbums) {
+    for (const label of getAlbumTagLabels(album)) {
+      labelsBySlug.set(slugify(label), label);
+    }
+  }
+
+  return Array.from(labelsBySlug, ([slug, label]) => ({ label, slug }));
 }
 
-function isPublicAlbum(album: LocalArchiveAlbum) {
-  return album.status === "published" && !album.isDemo;
+export function getPublicTagBySlug(slug: string): PublicTag | undefined {
+  return getPublicTags().find((tag) => tag.slug === slug);
 }
 
-function normalizeTagLabel(value: string) {
-  return value.trim().toLocaleLowerCase("en");
+export function getPublicAlbumsForTag(slug: string): PublicAlbumSummary[] {
+  return albumSummaries.filter((album) => album.tagSlugs.includes(slug));
+}
+
+export function isFilmAlbum(album: PublicAlbumSummary) {
+  return album.kind === "film";
+}
+
+function getAlbumTagLabels(album: (typeof portfolioManifest.albums)[number]) {
+  return Array.from(
+    new Set(
+      [album.type, album.year, album.location, album.filmStock, ...album.tags]
+        .map((label) => label.trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function slugify(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+function stripLeadingSlash(value: string) {
+  return value.replace(/^\/+/, "");
 }

@@ -36,7 +36,6 @@ type QueueItem = {
   id: string;
   previewUrl?: string;
   progress: number;
-  retainSource: boolean;
   result?: UploadPhotoResult;
   status: QueueStatus;
   thumbBytes?: number;
@@ -50,7 +49,6 @@ export function CloudflareIngestWorkspace() {
   const [archiveLoading, setArchiveLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState("");
-  const [retainSource, setRetainSource] = useState(false);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [selectedAlbumId, setSelectedAlbumId] = useState<string>();
   const [uploading, setUploading] = useState(false);
@@ -92,6 +90,8 @@ export function CloudflareIngestWorkspace() {
     (albumPhoto) => albumPhoto.albumId === selectedAlbumId
   ).length ?? 0;
   const pendingCount = queue.filter(canUploadItem).length;
+  const storedBytes = archive?.assets.reduce((sum, asset) => sum + asset.bytes, 0) ?? 0;
+  const storageWarning = storedBytes >= 8 * 1024 * 1024 * 1024;
 
   async function createAlbum() {
     const title = newTitle.trim();
@@ -128,7 +128,6 @@ export function CloudflareIngestWorkspace() {
         file,
         id: crypto.randomUUID(),
         progress: invalid ? 0 : 5,
-        retainSource,
         status: invalid ? "failed" : "queued"
       }];
     });
@@ -169,7 +168,6 @@ export function CloudflareIngestWorkspace() {
           display: prepared.display,
           file: item.file,
           height: prepared.height,
-          retainSource: item.retainSource,
           thumb: prepared.thumb,
           width: prepared.width
         });
@@ -264,7 +262,11 @@ export function CloudflareIngestWorkspace() {
               <div><dt>Status</dt><dd>{selectedAlbum.status}</dd></div>
               <div><dt>Stored photos</dt><dd>{selectedPhotoCount}</dd></div>
               <div><dt>Next position</dt><dd>{selectedPhotoCount + 1}</dd></div>
+              <div><dt>Archive storage</dt><dd>{formatBytes(storedBytes)}</dd></div>
             </dl>
+            {storageWarning ? (
+              <p className="admin-ingest__storage-warning"><CircleAlert aria-hidden />Archive storage is above the 8 GiB working budget. Review R2 billing before a large upload.</p>
+            ) : null}
             <div
               className="admin-ingest__drop"
               data-disabled={uploading ? "true" : undefined}
@@ -293,20 +295,8 @@ export function CloudflareIngestWorkspace() {
             <div className="admin-ingest__pipeline">
               <span>thumb <b>≤ 300 KB</b></span>
               <span>display <b>≈ 1 MB</b></span>
-              <span>source <b>{retainSource ? "unchanged · private" : "not stored"}</b></span>
+              <span>source <b>unchanged · private</b></span>
             </div>
-            <label className="admin-ingest__retain-source">
-              <input
-                checked={retainSource}
-                disabled={uploading}
-                onChange={(event) => setRetainSource(event.target.checked)}
-                type="checkbox"
-              />
-              <span>
-                <b>Keep source JPEG in private R2</b>
-                <small>Off by default to keep the archive inside the 10 GB free tier.</small>
-              </span>
-            </label>
             <button className="admin-button admin-button--primary admin-button--full" disabled={!pendingCount || uploading} onClick={() => void uploadPending()} type="button">
               {uploading ? <LoaderCircle className="is-spinning" aria-hidden /> : <Upload aria-hidden />}
               {uploading ? "Uploading sequentially" : `Upload ${pendingCount || ""} JPEG${pendingCount === 1 ? "" : "s"}`}
@@ -340,7 +330,7 @@ export function CloudflareIngestWorkspace() {
                 </div>
                 <div className="admin-ingest__queue-copy">
                   <strong title={item.file.name}>{item.file.name}</strong>
-                  <small>{albums.find((album) => album.id === item.albumId)?.title ?? "Album"} · {formatBytes(item.file.size)} · {item.retainSource ? "source retained" : "web only"} · {statusLabel(item.status)}</small>
+                  <small>{albums.find((album) => album.id === item.albumId)?.title ?? "Album"} · {formatBytes(item.file.size)} · source retained · {statusLabel(item.status)}</small>
                   {item.thumbBytes && item.displayBytes ? (
                     <small>thumb {formatBytes(item.thumbBytes)} · display {formatBytes(item.displayBytes)}</small>
                   ) : null}

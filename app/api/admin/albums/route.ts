@@ -20,7 +20,7 @@ const createAlbumSchema = z.object({
 
 export async function GET(request: Request) {
   const { env } = getCloudflareContext();
-  const denied = requireAdminAccess(request, env);
+  const denied = await requireAdminAccess(request, env);
   if (denied) return denied;
 
   try {
@@ -34,7 +34,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const { env } = getCloudflareContext();
-  const denied = requireAdminAccess(request, env);
+  const denied = await requireAdminAccess(request, env);
   if (denied) return denied;
 
   try {
