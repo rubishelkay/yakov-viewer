@@ -21,14 +21,14 @@ The admin is a private archive workspace on Cloudflare infrastructure. It should
 ## Recommended Cloudflare Stack
 
 ```txt
-Cloudflare Pages
-  Public Next static site
-  Admin frontend route or separate admin app
+Cloudflare Workers + OpenNext
+  Combined Next.js public site and protected admin
+  Dynamic admin API routes
 
 Cloudflare Access
   Protects admin access for the owner email first
 
-Cloudflare Workers / Pages Functions
+Cloudflare Worker route handlers
   Admin API
   Upload orchestration
   Signed upload URLs
@@ -176,9 +176,9 @@ Recommended first step:
 
 ```txt
 same repository
-  /admin static frontend
+  /admin frontend
   Cloudflare Access protection
-  Workers / Pages Functions API
+  Next route-handler API on the OpenNext Worker
 ```
 
 This keeps the project easier to develop while preserving a clean separation between public pages and private API actions.

@@ -79,6 +79,8 @@ Current status:
 - Public/admin route split exists.
 - Existing editor screens are local-first; a separate Cloud-backed ingest screen now
   exists at `/admin/ingest` so browser and Cloudflare state are never silently mixed.
+- `/admin/ingest` is isolated at the route-layout level from the local
+  localStorage/IndexedDB provider, and admin navigation disables eager route prefetch.
 - Metadata persists in `localStorage`.
 - JPEG previews persist in IndexedDB.
 - Unused Cloudflare Pages Function stubs have been removed.
@@ -109,9 +111,9 @@ Current status:
   OpenNext Worker. The old Pages project remains detached but available for rollback.
 - Cloudflare Access now protects both admin page and API path families for exactly the
   owner account. Migration `0003_upload_job_photo.sql` is applied and Worker version
-  `652010be-06b1-49e6-a051-6a1a878be02a` runs with server-side Access JWT validation.
-  Owner consent and protected archive-read QA pass; a separately confirmed smoke upload
-  remains before real use.
+  `dd98686e-673e-41fa-b816-d57cfc4f1131` runs with server-side Access JWT validation.
+  Owner consent, protected archive reads, album creation, browser derivative generation,
+  private source retention, D1 writes, R2 readback, and one production smoke upload pass.
 - Album display order can now be reversed with one album-level setting; membership
   positions stay canonical and are not destructively renumbered.
 - Public viewing polish now includes stable header controls, image loading feedback,
@@ -134,6 +136,10 @@ Current status:
   `652010be-06b1-49e6-a051-6a1a878be02a`: Access intercepts anonymous admin requests,
   the Worker validates owner JWTs, and migration `0003_upload_job_photo.sql` is applied
   with a clean foreign-key check.
+- The July 26 production upload checkpoint is live as Worker version
+  `dd98686e-673e-41fa-b816-d57cfc4f1131`: one draft album and one real JPEG completed
+  the browser -> Worker -> private/public R2 -> D1 round trip. The source matched the
+  local SHA-256, derivatives matched D1 metadata, and the draft stayed non-public.
 
 ## Immediate Roadmap
 

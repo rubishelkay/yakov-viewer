@@ -201,14 +201,18 @@ export function AdminArchiveProvider({ children }: Readonly<{ children: React.Re
   useEffect(() => {
     if (!hydrated) return;
 
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        version: STORAGE_VERSION,
-        archive
-      })
-    );
-    localStorage.removeItem(LEGACY_STORAGE_KEY);
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          version: STORAGE_VERSION,
+          archive
+        })
+      );
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+    } catch {
+      // Keep the editor usable when Safari blocks storage or its quota is full.
+    }
   }, [archive, hydrated]);
 
   useEffect(() => {

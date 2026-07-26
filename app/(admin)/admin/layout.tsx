@@ -3,7 +3,6 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
-import { AdminArchiveProvider } from "@/admin/admin-state";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { verifyAdminAccess } from "@/server/cloudflare/admin-auth";
 import "@/styles/admin.css";
@@ -22,9 +21,5 @@ export default async function AdminLayout({ children }: Readonly<{ children: Rea
   const access = await verifyAdminAccess(requestHeaders, env);
   if (!access.ok) notFound();
 
-  return (
-    <AdminArchiveProvider>
-      <AdminShell>{children}</AdminShell>
-    </AdminArchiveProvider>
-  );
+  return <AdminShell>{children}</AdminShell>;
 }

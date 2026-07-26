@@ -35,8 +35,8 @@ Completed on 2026-07-18:
 - OpenNext prerender cache configured and populated in `yakov-next-cache`;
 - technical Worker routes return 200, including a real album and health endpoint;
 - `assets.yakov.shmol.cc` is active and serves immutable JPEG responses;
-- `yakov.shmol.cc/*` is active on Worker version
-  `652010be-06b1-49e6-a051-6a1a878be02a`;
+- `yakov.shmol.cc/*` is active on verified upload Worker version
+  `dd98686e-673e-41fa-b816-d57cfc4f1131`;
 - Cloudflare Access application `Yakov Viewer Admin` protects `/admin`, `/admin/*`,
   `/api/admin`, and `/api/admin/*` with the reusable `Owner only` policy;
 - the Access policy allows exactly `Jacobjshmol@gmail.com` and uses the built-in
@@ -52,6 +52,12 @@ Completed on 2026-07-18:
 - owner OAuth consent completed on 2026-07-22; `/admin/ingest` loads for
   `Jacobjshmol@gmail.com` and a manual archive refresh succeeds through the protected
   production API.
+- production smoke upload completed on 2026-07-26: one draft album, one review photo,
+  three assets, and one upload job were written through the protected UI;
+- private source readback matched the local SHA-256 and bytes; public thumb/display
+  returned immutable JPEG responses; the source is not reachable through the public
+  asset hostname;
+- the accepted public site remains at 9 albums and does not expose the smoke draft.
 
 ## Current Domain Routing
 
@@ -80,8 +86,10 @@ Access was created on 2026-07-21. Its non-secret runtime identifiers are recorde
 
 Next:
 
-1. In a separately confirmed step, test album create and one JPEG upload, then verify
-   private source readback, public derivatives, D1 rows, and bin behavior.
+1. Upload a controlled 30-40 JPEG draft album and verify sequential queue behavior,
+   order, retry, reload, derivative budgets, and R2/D1 totals.
+2. Add Cloudflare edit mutations for album/photo metadata, status, order, covers, tags,
+   hide/show, and Bin before using the cloud archive as the public source of truth.
 
 ## GitHub Workers Builds
 

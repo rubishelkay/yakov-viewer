@@ -1,6 +1,6 @@
 # Панель управления: текущий статус и ближайший путь
 
-Обновлено: 22 июля 2026.
+Обновлено: 26 июля 2026.
 
 ## Где мы сейчас
 
@@ -42,23 +42,37 @@ Source обязателен для каждой новой фотографии.
    `Jacobjshmol@gmail.com`.
 3. Access team domain и application AUD записаны в Worker variables.
 4. Production migration `0003_upload_job_photo.sql` применена.
-5. Worker version `652010be-06b1-49e6-a051-6a1a878be02a` развернут с
+5. Worker version `dd98686e-673e-41fa-b816-d57cfc4f1131` развернут с
    `ADMIN_ACCESS_ENABLED=true`.
 6. Публичные маршруты отвечают `200`, а анонимные admin-запросы перехватываются Access.
 7. Owner-вход выполнен; production `/admin/ingest` загружает архив из D1 через
    защищенный API.
 
-Перед реальным наполнением остается отдельно подтвержденный маленький smoke upload с
-проверкой private R2, public R2 и D1.
+Production smoke upload завершен 26 июля 2026:
+
+- создан непубличный album `Cloud upload smoke test`;
+- JPEG `1920x1273`, `1,764,148` bytes загружен через Safari admin;
+- private `sourceJpeg` совпал с локальным файлом побайтно и по SHA-256;
+- public thumb: `640x424`, `121,898` bytes;
+- public display: `1920x1273`, `1,132,453` bytes;
+- D1 теперь содержит 10 albums, 313 photos, 313 memberships, 627 assets и 1 upload job;
+- album остался `draft`, photo получил `review`, upload job завершился со статусом
+  `review` и progress `100`;
+- draft отсутствует в публичном album index и не имеет публичного route.
+
+Cloud ingest вынесен из localStorage/IndexedDB provider в отдельную route-ветку. Admin
+navigation больше не prefetch-ит все тяжелые локальные редакторы, что делает upload
+страницу устойчивее в Safari.
 
 ## Следующие milestones
 
 ### A. Protected cloud ingest
 
-- Access, migration, deploy;
-- один тестовый JPEG;
-- затем тестовый альбом на 30-40 JPEG;
-- проверка reload, порядка, размеров и отсутствия файлов в Git.
+- Access, migration, deploy - done;
+- один production JPEG с readback-проверкой - done;
+- следующий шаг: тестовый альбом на 30-40 JPEG;
+- проверить последовательную очередь, порядок, retry, reload, размеры и отсутствие
+  файлов в Git.
 
 ### B. Cloudflare mutations
 
@@ -90,7 +104,9 @@ Source обязателен для каждой новой фотографии.
 
 ## Практическое правило
 
-Настоящие новые альбомы загружаются только через защищенный remote admin после smoke
-test. Локальная админка остается средой разработки. Перед Access, migration, deploy или
-production upload Codex дает короткий бриф с точными именами ресурсов и ожидаемым
-эффектом. Секреты и изображения никогда не попадают в Git.
+Настоящие новые альбомы теперь можно создавать и наполнять через защищенный
+`/admin/ingest`. Пока cloud mutations не готовы, title/status/tags/covers/order после
+загрузки не следует считать финально редактируемыми. Локальная админка остается UX-средой
+разработки. Перед Access, migration, deploy или production upload Codex дает короткий
+бриф с точными именами ресурсов и ожидаемым эффектом. Секреты и изображения никогда не
+попадают в Git.

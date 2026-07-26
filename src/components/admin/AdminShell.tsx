@@ -35,7 +35,7 @@ export function AdminShell({ children }: Readonly<{ children: React.ReactNode }>
         Admin MVP is desktop-first. Scroll sideways on narrow screens.
       </div>
       <aside className="admin-rail" aria-label="Admin navigation">
-        <Link className="admin-rail__brand" href="/admin" aria-label="Yakov admin dashboard">
+        <Link className="admin-rail__brand" href="/admin" aria-label="Yakov admin dashboard" prefetch={false}>
           <Archive aria-hidden />
           <span>
             Yakov
@@ -55,6 +55,7 @@ export function AdminShell({ children }: Readonly<{ children: React.ReactNode }>
                 data-active={active ? "true" : undefined}
                 href={item.href}
                 key={item.href}
+                prefetch={false}
               >
                 <Icon aria-hidden />
                 <span>{item.label}</span>

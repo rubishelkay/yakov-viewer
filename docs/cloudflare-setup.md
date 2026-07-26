@@ -56,7 +56,7 @@ cloudflare-env.d.ts   -> compact generated binding types
 ```
 
 `wrangler.jsonc` contains the real production D1 UUID and the three production R2
-bindings. Treat `pnpm deploy` as a production command. Local D1 still uses Wrangler's
+bindings. Treat `pnpm run deploy` as a production command. Local D1 still uses Wrangler's
 isolated `.wrangler/state` database when `--local` is passed.
 
 Local commands:
@@ -141,6 +141,12 @@ Local and production verification completed on 2026-07-18:
 - `0003_upload_job_photo.sql` was applied remotely on 2026-07-21; `upload_jobs.photo_id`
   is nullable, indexed, and references `archive_photos(id)` with `ON DELETE CASCADE`;
 - the post-migration production foreign-key check returned no violations.
+- the 2026-07-26 protected smoke upload added one draft album, one review photo, one
+  membership, three assets, and one completed upload job; current totals are 10 albums,
+  313 photos, 313 memberships, 627 assets, and 1 upload job;
+- private source readback matched the local JPEG byte-for-byte; public thumb and display
+  readbacks matched their D1 sizes and dimensions;
+- the smoke draft remains absent from the public index and public routes.
 
 ## Admin Access
 
@@ -163,7 +169,8 @@ Jacobjshmol@gmail.com
 Created on 2026-07-21 as `Yakov Viewer Admin`, using the reusable `Owner only` policy.
 The non-secret team domain and application AUD are stored in `wrangler.jsonc` for JWT
 verification. The first guarded deploy is Worker version
-`652010be-06b1-49e6-a051-6a1a878be02a`, with `ADMIN_ACCESS_ENABLED=true`.
+`652010be-06b1-49e6-a051-6a1a878be02a`. The current verified upload Worker is
+`dd98686e-673e-41fa-b816-d57cfc4f1131`, with `ADMIN_ACCESS_ENABLED=true`.
 
 Application-level login is not required for the first upload milestone.
 
@@ -235,7 +242,7 @@ Repository-safe files include binding names, schema/migrations, Worker configura
 
 ## Current Audit Status
 
-As of 2026-07-21:
+As of 2026-07-26:
 
 - Next.js 16.2.6 builds successfully with `@opennextjs/cloudflare` 1.20.1;
 - the generated Worker serves `/`, real album routes, and `/api/health` through
@@ -250,6 +257,12 @@ As of 2026-07-21:
 - Cloudflare Access intercepts unauthenticated `/admin*` and `/api/admin*` requests;
 - the owner completed the Cloudflare identity-provider consent on 2026-07-22;
   authenticated `/admin/ingest` and a manual production archive refresh both succeed;
+- production album creation and one Safari JPEG upload passed end to end;
+- the unchanged private source passed byte-for-byte and SHA-256 readback, the public
+  121,898-byte thumb and 1,132,453-byte display returned `200` with immutable caching,
+  and the corresponding public source path returned `404`;
+- the Cloud ingest route is isolated from localStorage/IndexedDB editors and admin links
+  do not eagerly prefetch every editor route;
 - production migration `0003_upload_job_photo.sql` is applied and the foreign-key check
   remains clean;
 - `yakov.shmol.cc/*` is live on the OpenNext Worker through a zone Worker Route;
