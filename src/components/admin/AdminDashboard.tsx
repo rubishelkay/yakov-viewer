@@ -4,41 +4,39 @@ import Link from "next/link";
 import {
   ArrowRight,
   CircleAlert,
-  Cloud,
-  Eye,
   HardDrive,
+  ImagePlus,
+  Images,
   RotateCcw,
   UploadCloud
 } from "lucide-react";
 
 import {
+  formatBytes,
   getAlbumCoverPreviewUrlFromArchive,
   getDashboardSnapshotFromArchive,
   getOrderedAlbumsFromArchive,
-  getPhotoThumbnailUrlFromArchive,
   useAdminArchive
-} from "@/admin/admin-state";
-import { formatBytes } from "@/admin/repository";
+} from "@/admin/cloud-admin-state";
 import { AdminDemoBadge } from "@/components/admin/AdminDemoBadge";
 import { useAdminConfirmDialog } from "@/components/admin/AdminConfirmDialog";
-import type { LocalArchiveAlbum, LocalArchivePhoto } from "@/admin/admin-state";
+import type { LocalArchiveAlbum } from "@/admin/cloud-admin-state";
 
 export function AdminDashboard() {
-  const { actions, archive, hydrated, previewUrls } = useAdminArchive();
+  const { actions, archive } = useAdminArchive();
   const { confirm, dialog } = useAdminConfirmDialog();
   const snapshot = getDashboardSnapshotFromArchive(archive);
   const latestAlbums = getOrderedAlbumsFromArchive(archive).slice(0, 5);
   const draftAlbums = getOrderedAlbumsFromArchive(archive).filter((album) => album.status === "draft");
 
-  async function resetLocalArchive() {
+  async function refreshArchive() {
     const confirmed = await confirm({
-      confirmLabel: "Reset archive",
-      message: "Reset localStorage and local preview blobs back to the seed archive?",
-      title: "Reset local archive",
-      tone: "danger"
+      confirmLabel: "Refresh",
+      message: "Reload the latest archive state from Cloudflare D1?",
+      title: "Refresh Cloudflare archive"
     });
 
-    if (confirmed) await actions.resetLocalArchive();
+    if (confirmed) await actions.refreshArchive();
   }
 
   return (
@@ -49,14 +47,13 @@ export function AdminDashboard() {
           <p className="admin-kicker">Private archive workspace</p>
           <h1>Dashboard</h1>
           <p>
-            Upload, review, publish, and clean up the archive before the public portfolio
-            starts reading live Cloudflare data.
+            Upload, review, publish, and clean up the Cloudflare archive used by the public portfolio.
           </p>
         </div>
         <div className="admin-header-actions">
-          <button className="admin-ghost-button" onClick={() => void resetLocalArchive()} type="button">
+          <button className="admin-ghost-button" onClick={() => void refreshArchive()} type="button">
             <RotateCcw aria-hidden />
-            Reset local
+            Refresh D1
           </button>
           <Link className="admin-button admin-button--primary" href="/admin/albums">
             <UploadCloud aria-hidden />
@@ -66,13 +63,13 @@ export function AdminDashboard() {
       </header>
 
       <section className="admin-metric-grid" aria-label="Archive snapshot">
-        <MetricCard label="Today" value={`${snapshot.analytics.visitsToday}`} detail="Local analytics waits for Cloudflare" icon={<Eye />} />
-        <MetricCard label="7 days" value={`${snapshot.analytics.visitsSevenDays}`} detail={hydrated ? "Local state loaded" : "Loading local state"} icon={<Cloud />} />
+        <MetricCard label="Albums" value={`${snapshot.activeAlbums}`} detail={`${snapshot.draftAlbums} drafts`} icon={<ImagePlus />} />
+        <MetricCard label="Photos" value={`${snapshot.activePhotos}`} detail="Stored in the D1 archive" icon={<Images />} />
         <MetricCard label="Review photos" value={`${snapshot.reviewPhotos}`} detail={`${draftAlbums.length} draft albums`} icon={<CircleAlert />} />
         <MetricCard
           label="Storage"
           value={formatBytes(snapshot.storage.totalBytes)}
-          detail={`${formatBytes(snapshot.storage.privateBytes)} private`}
+          detail={`${formatBytes(snapshot.storage.publicBytes)} public assets`}
           icon={<HardDrive />}
         />
       </section>
@@ -113,22 +110,6 @@ export function AdminDashboard() {
           </div>
         </section>
 
-        <section className="admin-panel">
-          <div className="admin-panel__head">
-            <div>
-              <p className="admin-kicker">Popular</p>
-              <h2>Photo attention</h2>
-            </div>
-            <span className="admin-muted">local preview</span>
-          </div>
-
-          <div className="admin-photo-strip">
-            {snapshot.popularPhotos.map((photo) => (
-              <PopularPhoto archive={archive} photo={photo} previewUrls={previewUrls} key={photo.id} />
-            ))}
-          </div>
-        </section>
-
         <section className="admin-panel admin-panel--wide">
           <div className="admin-panel__head">
             <div>
@@ -157,7 +138,7 @@ export function AdminDashboard() {
           </div>
           <p className="admin-panel__copy">
             Deleted records stay recoverable. Permanent purge is a separate action and will
-            later remove R2 files from Cloudflare.
+            remove its unshared R2 files from Cloudflare.
           </p>
           <Link className="admin-inline-link admin-inline-link--spaced" href="/admin/bin">
             Open bin <ArrowRight aria-hidden />
@@ -208,23 +189,6 @@ function AlbumRow({ album }: { album: LocalArchiveAlbum }) {
       </span>
       <span>{setCount || "No"} sets</span>
     </div>
-  );
-}
-
-function PopularPhoto({
-  archive,
-  photo,
-  previewUrls
-}: {
-  archive: ReturnType<typeof useAdminArchive>["archive"];
-  photo: LocalArchivePhoto;
-  previewUrls: Record<string, string>;
-}) {
-  return (
-    <figure>
-      <CoverImage url={getPhotoThumbnailUrlFromArchive(archive, previewUrls, photo)} />
-      <figcaption>{photo.title}</figcaption>
-    </figure>
   );
 }
 

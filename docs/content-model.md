@@ -180,7 +180,8 @@ publishedAt
 order without rewriting every `AlbumPhoto.position`: this is useful when a film scanner
 delivers frames from the last exposure to the first. New albums default to `forward`.
 
-The uploaded source JPEG should not be public by default if it is a large 5-30 MB file. The public site should normally use optimized web assets.
+The current uploaded 3-5 MB web JPEG becomes the public `expanded` tier after metadata
+sanitization. Full-size originals and RAW/TIFF masters remain in Google Drive.
 
 ## Photos
 
@@ -223,7 +224,8 @@ createdAt
 
 The pair `(albumId, photoId)` is unique. Reusing a photo in another album creates another membership row and does not duplicate `Photo` or `Asset` records.
 
-As of the July 2026 local migration, `AlbumPhoto` is canonical in Zod types, seeds, local state, ordering actions, public projections, and the D1 draft. Browser archives saved under localStorage version 3 are migrated to version 4 on load; IndexedDB preview IDs stay attached to canonical assets and are not rewritten.
+`AlbumPhoto` is canonical in Zod types, D1, admin mutations, and public projections.
+The runtime archive no longer uses localStorage or IndexedDB.
 
 For the first version, effective public tags are the union of direct photo tags and tags inherited from all published album memberships. This rule can later become configurable if curated albums should not contribute inherited tags.
 

@@ -11,6 +11,10 @@ import {
   type ArchiveStatus,
   type PublicDownloadPolicy
 } from "./archive-schema";
+import {
+  cloudArchiveMutationSchema,
+  type CloudArchiveMutation
+} from "./cloudflare-mutations";
 
 const uploadPhotoResultSchema = z.object({
   photo: archivePhotoSchema,
@@ -30,7 +34,7 @@ export async function readCloudflareArchive() {
 export async function createCloudflareAlbum(input: {
   title: string;
   subtitle?: string;
-  status?: ArchiveStatus;
+  status?: Exclude<ArchiveStatus, "trash" | "deleted">;
   publicDownloadPolicy?: PublicDownloadPolicy;
 }): Promise<ArchiveAlbum> {
   return archiveAlbumSchema.parse(
@@ -47,6 +51,7 @@ export async function uploadCloudflareJpeg(
   input: {
     clientUploadId: string;
     display: { blob: Blob; height: number; width: number };
+    expanded: { blob: Blob; colorProfile: "preserve" | "srgb"; height: number; width: number };
     file: File;
     height: number;
     thumb: { blob: Blob; height: number; width: number };
@@ -55,7 +60,8 @@ export async function uploadCloudflareJpeg(
   }
 ): Promise<UploadPhotoResult> {
   const body = new FormData();
-  body.set("file", input.file);
+  body.set("file", input.expanded.blob, input.file.name);
+  body.set("expandedColorProfile", input.expanded.colorProfile);
   body.set("width", String(input.width));
   body.set("height", String(input.height));
   body.set("clientUploadId", input.clientUploadId);
@@ -71,6 +77,18 @@ export async function uploadCloudflareJpeg(
     await requestData(`/api/admin/albums/${encodeURIComponent(albumId)}/photos/`, {
       method: "POST",
       body
+    })
+  );
+}
+
+export async function mutateCloudflareArchive(
+  mutation: CloudArchiveMutation
+): Promise<{ id?: string }> {
+  return z.object({ id: z.string().optional() }).parse(
+    await requestData("/api/admin/mutations/", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(cloudArchiveMutationSchema.parse(mutation))
     })
   );
 }

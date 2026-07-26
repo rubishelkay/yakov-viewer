@@ -2,109 +2,62 @@
 
 ## Decision
 
-The project should move toward live Cloudflare API reads for public archive data instead of relying only on static generated pages.
-
-Recommended first architecture:
-
-```txt
-Cloudflare Pages
-  Static public UI shell
-  Static admin UI shell
-
-Pages Functions / Workers
-  Public API
-  Admin API
-
-D1
-  Sets, albums, photos, collections, tags, settings
-
-R2
-  Public optimized assets
-  Private source/master assets
-```
-
-Cloudflare Pages Functions can add dynamic server-side code to a Pages project. D1 can be bound to Pages Functions/Workers, and R2 can be bound for asset operations.
-
-## Why Not Pure Static Only
-
-Pure static export is excellent for a small portfolio, but it becomes awkward for:
-
-- admin-driven publishing;
-- filtering all photos by multiple tags;
-- hiding/unhiding photos without rebuilding every page;
-- collections that change often;
-- Logjamming reading the same archive.
-
-## Why Not Full Dynamic Everything Immediately
-
-A full dynamic app is more flexible, but it adds complexity before the archive model is proven.
-
-The recommended middle path:
-
-- static shell for speed and reliability;
-- live API for data;
-- client-side filtering and pagination for archive views;
-- optional build-time/static snapshots later for SEO-critical pages.
-
-## Public API Shape
-
-Initial public endpoints:
+The public portfolio reads the published subset of `yakov_archive` directly from D1 in
+server components. The combined application runs on one OpenNext Cloudflare Worker.
+There is no static manifest/localStorage split and no separate Pages Functions app.
 
 ```txt
-GET /api/public/settings
-GET /api/public/sets
-GET /api/public/albums?tags=bangkok,film
-GET /api/public/albums/:slug
-GET /api/public/photos?tags=film,bangkok&page=1
-GET /api/public/collections
-GET /api/public/collections/:slug
+public request
+  -> Next server component
+  -> published-only D1 query
+  -> public R2 URLs
 ```
 
-Public API rules:
+Routes are dynamic so an admin publication can appear without rebuilding the project.
+Successful admin mutations revalidate the public layout tree.
 
-- return only published albums;
-- return only published photos;
-- exclude hidden, trash, and deleted records;
-- hide photos whose parent album is not public;
-- return public asset URLs only;
-- never return private `sourceJpeg`, RAW/RAF/TIFF, or private R2 keys.
+## Visibility Rules
 
-## Filtering
+- album must be `published`;
+- photo must be `published`;
+- hidden, draft, review, Bin, and deleted entities are omitted;
+- cover fallback can use only a published photo and public asset;
+- only public `thumb`, `display`, and `expanded` URLs are returned;
+- no private key, EXIF/GPS, Google Drive URL, RAW, or TIFF enters the public model.
 
-For all-photo filtering, use effective tags:
+## Route Semantics
 
 ```txt
-effective photo tags =
-  direct photo tags
-  + tags inherited from the parent album
+/                 albums from published Sets, ordered by Set then membership
+/albums           every published album, ordered globally
+/albums/:slug     published photos in AlbumPhoto order
+/tags/:slug       published albums with the album/effective photo tag
+/about            static accepted copy
 ```
 
-Example:
+An album may be published and intentionally absent from the homepage by leaving it
+outside every published Set.
+
+## Images And Download
+
+Cards and dense grids use `thumb`. Normal viewing uses `display`. Viewer zoom
+lazy-loads `expanded`. An album-level policy controls whether a Download command is
+rendered; the route streams `expanded` as an attachment only when allowed.
+
+## Tags
+
+Public album filter tags are the union of:
 
 ```txt
-Album: Film 060
-Album tags: Film, Bangkok, 2025
-
-Photo 12 tags: portrait, night
-
-Effective tags:
-Film, Bangkok, 2025, portrait, night
+album tags
++ direct tags of published photos in that album
 ```
 
-This allows filters such as:
+Tag pages return albums, matching the accepted public design. Future All Photos
+multi-filtering can use effective photo tags with AND logic without changing storage.
 
-```txt
-Film + Bangkok
-Digital + Chiang Mai
-Mountains + Film
-```
+## Caching
 
-Filtering uses AND logic. Selecting `Film`, then `Bangkok`, narrows the result to photos that match both effective tags.
-
-## Hidden Photos In Collections
-
-Collection membership should remain in D1 even when a photo becomes hidden.
-
-Public API should omit hidden photos. Admin should show a warning that a collection contains hidden items and offer a way to review them.
-
-If the photo is unhidden later, it can reappear in the public collection.
+R2 asset URLs are immutable and cache for one year. D1-backed HTML remains dynamic
+during this stage so publication changes are simple and predictable. Fine-grained
+Next cache tags can be added later if traffic makes that useful.

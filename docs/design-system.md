@@ -47,6 +47,7 @@ The public theme follows the system by default. The header toggle cycles
 - lists and contact sheets use stored thumbnails;
 - normal public viewing uses stored display JPEGs;
 - fullscreen fit never crops the photograph;
-- grids never request the private source JPEG;
+- grids request `thumb`, normal viewing requests `display`, and only explicit zoom
+  requests `expanded`;
 - dimensions are always known to avoid layout shift;
 - loaders, focus states, reduced motion, and keyboard controls remain functional.

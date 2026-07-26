@@ -1,25 +1,27 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Images, Link2, Search, Tags } from "lucide-react";
+import { CircleX, Images, Link2, Search, Tags } from "lucide-react";
 
 import {
+  formatBytes,
   getAlbumPhotosForPhotoFromArchive,
   getEffectivePhotoTagIdsFromArchive,
   getOrderedAlbumsFromArchive,
   getPhotoDisplayUrlFromArchive,
   getPhotoThumbnailUrlFromArchive,
   useAdminArchive
-} from "@/admin/admin-state";
-import { formatBytes } from "@/admin/repository";
+} from "@/admin/cloud-admin-state";
 import { AdminDemoBadge } from "@/components/admin/AdminDemoBadge";
+import { useAdminConfirmDialog } from "@/components/admin/AdminConfirmDialog";
 import type { ArchiveStatus } from "@/admin/archive-schema";
-import type { LocalArchivePhoto } from "@/admin/admin-state";
+import type { LocalArchivePhoto } from "@/admin/cloud-admin-state";
 
 const statusFilters: Array<ArchiveStatus | "all"> = ["all", "draft", "review", "published", "hidden"];
 
 export function PhotoLibraryWorkspace() {
   const { actions, archive, previewUrls } = useAdminArchive();
+  const { confirm, dialog } = useAdminConfirmDialog();
   const albums = getOrderedAlbumsFromArchive(archive);
   const albumOrderById = new Map(albums.map((album, index) => [album.id, index]));
   const photoOrderById = new Map<string, number>();
@@ -77,14 +79,26 @@ export function PhotoLibraryWorkspace() {
     appearances.some((appearance) => appearance.albumId === targetAlbumId)
   );
 
-  function addSelectedToAlbum() {
+  async function addSelectedToAlbum() {
     if (!selectedPhoto || !targetAlbumId || targetAlbumAlreadyContains) return;
-    const linkedPhotoId = actions.addExistingPhotoToAlbum(selectedPhoto.id, targetAlbumId);
+    const linkedPhotoId = await actions.addExistingPhotoToAlbum(selectedPhoto.id, targetAlbumId);
     if (linkedPhotoId) setSelectedPhotoId(linkedPhotoId);
+  }
+
+  async function removeAppearance(albumId: string) {
+    if (!selectedPhoto || appearances.length <= 1) return;
+    const album = albumById.get(albumId);
+    const confirmed = await confirm({
+      confirmLabel: "Remove from album",
+      message: `Remove "${selectedPhoto.title}" from "${album?.title ?? "this album"}"? Its file and other album appearances remain unchanged.`,
+      title: "Remove linked photo"
+    });
+    if (confirmed) await actions.removePhotoFromAlbum(albumId, selectedPhoto.id);
   }
 
   return (
     <div className="admin-column-browser admin-column-browser--photos">
+      {dialog}
       <section className="admin-column admin-column--list" aria-label="Photo filters">
         <div className="admin-column-head">
           <div>
@@ -221,9 +235,20 @@ export function PhotoLibraryWorkspace() {
               <h4>Appearances</h4>
               <div className="admin-linked-list">
                 {appearances.map((appearance) => (
-                  <div key={`${appearance.albumId}:${appearance.photoId}`}>
-                    <span>{albumById.get(appearance.albumId)?.title ?? "Unknown album"}</span>
-                    <small>membership · #{appearance.position}</small>
+                  <div className="admin-linked-list__row" key={`${appearance.albumId}:${appearance.photoId}`}>
+                    <span>
+                      <strong>{albumById.get(appearance.albumId)?.title ?? "Unknown album"}</strong>
+                      <small>membership · #{appearance.position}</small>
+                    </span>
+                    <button
+                      aria-label={`Remove from ${albumById.get(appearance.albumId)?.title ?? "album"}`}
+                      disabled={appearances.length <= 1}
+                      onClick={() => void removeAppearance(appearance.albumId)}
+                      title={appearances.length <= 1 ? "A photo must remain in at least one album." : "Remove this album membership"}
+                      type="button"
+                    >
+                      <CircleX aria-hidden />
+                    </button>
                   </div>
                 ))}
               </div>

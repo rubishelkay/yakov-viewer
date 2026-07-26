@@ -3,6 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { apiData, apiError } from "@/server/cloudflare/api-response";
 import { requireAdminAccess } from "@/server/cloudflare/admin-auth";
 import { ArchiveWriteError, createD1PhotoUpload } from "@/server/cloudflare/archive-d1";
+import { inspectPublicJpeg, JpegMetadataError } from "@/lib/jpeg-metadata";
 
 export const dynamic = "force-dynamic";
 
@@ -31,11 +32,12 @@ export async function POST(
     const thumbHeight = positiveInteger(form.get("thumbHeight"));
     const displayWidth = positiveInteger(form.get("displayWidth"));
     const displayHeight = positiveInteger(form.get("displayHeight"));
+    const expandedColorProfile = colorProfile(form.get("expandedColorProfile"));
     const clientUploadId = optionalText(form.get("clientUploadId"));
     const title = optionalText(form.get("title"));
 
     if (!(file instanceof File)) {
-      return apiError("missing_file", "The private source JPEG is required.", 400);
+      return apiError("missing_file", "The expanded JPEG is required.", 400);
     }
     if (!(thumb instanceof File) || !(display instanceof File)) {
       return apiError("missing_derivatives", "Thumb and display JPEG files are required.", 400);
@@ -48,6 +50,17 @@ export async function POST(
     }
     if (!file.size || file.size > maxJpegBytes) {
       return apiError("invalid_file_size", "JPEG size must be between 1 byte and 20 MiB.", 413);
+    }
+    if (!expandedColorProfile) {
+      return apiError("invalid_color_profile", "Expanded JPEG color profile is invalid.", 400);
+    }
+    const inspection = inspectPublicJpeg(new Uint8Array(await file.arrayBuffer()));
+    if (inspection.unsafeSegments.length) {
+      return apiError(
+        "unsafe_metadata",
+        `Expanded JPEG still contains public metadata: ${inspection.unsafeSegments.join(", ")}.`,
+        422
+      );
     }
     if (!thumb.size || thumb.size > maxThumbBytes || !display.size || display.size > maxDisplayBytes) {
       return apiError("invalid_derivative_size", "Thumb must be at most 512 KiB and display at most 2 MiB.", 413);
@@ -62,9 +75,10 @@ export async function POST(
         clientUploadId,
         display: { file: display, height: displayHeight, width: displayWidth },
         height,
-        source: file,
-        sourceBytes: file.size,
-        sourceFileName: file.name,
+        expanded: file,
+        expandedBytes: file.size,
+        expandedColorProfile,
+        expandedFileName: file.name,
         thumb: { file: thumb, height: thumbHeight, width: thumbWidth },
         title,
         width
@@ -72,6 +86,9 @@ export async function POST(
       { status: 201 }
     );
   } catch (error) {
+    if (error instanceof JpegMetadataError) {
+      return apiError("invalid_jpeg", error.message, 415);
+    }
     if (error instanceof ArchiveWriteError) {
       return apiError(error.code, error.message, error.status);
     }
@@ -99,4 +116,8 @@ function optionalText(value: FormDataEntryValue | null) {
   if (typeof value !== "string") return undefined;
   const normalized = value.trim();
   return normalized ? normalized.slice(0, 200) : undefined;
+}
+
+function colorProfile(value: FormDataEntryValue | null) {
+  return value === "preserve" || value === "srgb" ? value : undefined;
 }

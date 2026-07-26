@@ -3,11 +3,9 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
 import { PortfolioAlbum } from "@/components/portfolio/PortfolioAlbum";
-import { getPublicAlbumBySlug, getPublicAlbums } from "@/lib/portfolio";
+import { readPublicAlbumBySlug } from "@/server/cloudflare/public-portfolio-d1";
 
-export function generateStaticParams() {
-  return getPublicAlbums().map((album) => ({ slug: album.slug }));
-}
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params
@@ -15,7 +13,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const album = getPublicAlbumBySlug(slug);
+  const album = await readPublicAlbumBySlug(slug);
 
   return {
     title: album?.title ?? "Album",
@@ -25,7 +23,7 @@ export async function generateMetadata({
 
 export default async function AlbumPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const album = getPublicAlbumBySlug(slug);
+  const album = await readPublicAlbumBySlug(slug);
 
   if (!album) notFound();
 

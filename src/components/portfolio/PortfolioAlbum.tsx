@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
 import {
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
@@ -343,7 +343,6 @@ function PortfolioViewer({
   photos: PublicPhoto[];
 }) {
   const photo = photos[index];
-  const source = photo.displayUrl;
   const viewerRef = useRef<HTMLDivElement>(null);
   const suppressStageClick = useRef(false);
   const [controls, setControls] = useState(true);
@@ -361,6 +360,7 @@ function PortfolioViewer({
   const hideTimer = useRef<number | undefined>(undefined);
   const total = photos.length;
   const zoomed = transform.scale > minimumZoomScale;
+  const source = zoomed ? photo.expandedUrl : photo.displayUrl;
   const resetTransform = useCallback(() => {
     dragRef.current = null;
     touchGestureRef.current = null;
@@ -697,7 +697,7 @@ function PortfolioViewer({
             alt={photo.title}
             draggable={false}
             height={photo.height}
-            key={photo.id}
+            key={`${photo.id}:${zoomed ? "expanded" : "display"}`}
             src={source}
             width={photo.width}
             wrapperClassName="portfolio-viewer__image"
@@ -713,6 +713,17 @@ function PortfolioViewer({
       <button aria-label="Next photo" className="portfolio-viewer__control portfolio-viewer__arrow portfolio-viewer__arrow--next" onClick={next} type="button">
         <ChevronRight aria-hidden />
       </button>
+      {photo.downloadUrl ? (
+        <a
+          aria-label={`Download ${photo.title}`}
+          className="portfolio-viewer__control portfolio-viewer__download"
+          download
+          href={photo.downloadUrl}
+        >
+          <Download aria-hidden />
+          <span>Download</span>
+        </a>
+      ) : null}
       <span className="portfolio-viewer__control portfolio-viewer__title">{albumTitle}</span>
       <span aria-live="polite" className="portfolio-viewer__control portfolio-viewer__counter">
         {String(index + 1).padStart(2, "0")} / {String(total).padStart(2, "0")}

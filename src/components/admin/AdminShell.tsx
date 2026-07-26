@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import {
   Archive,
   CircleX,
-  CloudUpload,
   Database,
   Gauge,
   ImagePlus,
@@ -15,9 +14,10 @@ import {
   Tags
 } from "lucide-react";
 
+import { useAdminArchive } from "@/admin/cloud-admin-state";
+
 const navItems = [
   { href: "/admin", label: "Dashboard", icon: Gauge },
-  { href: "/admin/ingest", label: "Cloud upload", icon: CloudUpload },
   { href: "/admin/sets", label: "Sets", icon: Layers3 },
   { href: "/admin/albums", label: "Albums", icon: ImagePlus },
   { href: "/admin/photos", label: "Photos", icon: Images },
@@ -28,6 +28,7 @@ const navItems = [
 
 export function AdminShell({ children }: Readonly<{ children: React.ReactNode }>) {
   const pathname = usePathname();
+  const { error, syncState } = useAdminArchive();
 
   return (
     <div className="admin-shell">
@@ -66,8 +67,17 @@ export function AdminShell({ children }: Readonly<{ children: React.ReactNode }>
 
         <div className="admin-rail__status">
           <Database aria-hidden />
-          <span>Local editors + Cloud ingest</span>
+          <span title={error}>
+            {syncState === "loading"
+              ? "Loading Cloudflare"
+              : syncState === "saving"
+                ? "Saving to Cloudflare"
+                : syncState === "error"
+                  ? "Cloudflare sync error"
+                  : "D1 + R2 connected"}
+          </span>
         </div>
+        {error ? <p className="admin-rail__error" role="alert">{error}</p> : null}
       </aside>
 
       <div className="admin-stage">{children}</div>

@@ -33,25 +33,17 @@ Infrequent Access is cheaper for storage but charges retrieval and has a 30-day 
 
 ## Rough Storage Estimates
 
-The active free-plan policy is different from the older full-archive estimate below:
+Current per-photo storage is approximately:
 
 ```txt
-default per photo: thumb + display, usually about 0.5-1.2 MB total
-optional per photo: retained private source JPEG, commonly 3-5 MB
-3,600 default photos: roughly 2-4.5 GB plus cache/overhead
-3,600 retained sources alone: roughly 11-18 GB
+thumb:     <= 0.3 MB
+display:   around 1 MB
+expanded:  usually 3-5 MB
+total:     usually 4.0-6.3 MB
 ```
 
-Therefore source retention is off by default and full originals stay on owner-managed
-external storage. The larger examples remain useful only when deciding whether to move
-to paid storage later.
-
-Assume per photo:
-
-```txt
-sourceJpeg: 5-30 MB private
-display/expanded/download/thumb combined: 3-8 MB public
-```
+The expanded JPEG is not duplicated in private R2. Full 20-50 MB originals and
+RAW/TIFF files stay in Google Drive.
 
 Example archive sizes:
 
@@ -120,4 +112,5 @@ identity only, so no paid Access plan is needed.
 
 Cloudflare Images transformations have a free monthly allowance, then paid unique transformations. Because this archive may contain thousands of images and many sizes, the project should prefer generating and storing the main derivatives in R2 rather than relying only on endless on-the-fly transformations.
 
-Cloudflare image transformations can still be useful, but pre-generated `thumb`, `display`, `expanded`, and `downloadJpeg` give more control over cost and quality.
+Cloudflare image transformations can still be useful, but the stored
+`thumb`/`display`/`expanded` tiers give more control over cost and quality.

@@ -1,78 +1,75 @@
 # Image Pipeline
 
-## Current Input
+## Current Contract
 
-The accepted starting import contains 9 albums and 312 prepared JPEGs around 2000 px.
-Typical new admin uploads are also prepared JPEGs around 3-5 MB. The first upload API
-accepts JPEG only, with a 20 MiB per-file limit.
+The production upload path accepts prepared JPEG files only. A normal input is roughly
+2000 px and 3-5 MB; the hard request limit is 20 MiB.
 
-Large 30-50 MB originals normally remain in the owner's external archive. A JPEG that
-is selected in the Yakov Viewer admin is still preserved unchanged in private R2 so the
-site can reprocess it later without another upload.
-
-## Asset Versions
+One upload creates three public R2 objects:
 
 ```txt
-thumb        public contact-sheet/grid JPEG, target <= 300 KB
-display      public album/viewer JPEG, target around 1 MB, API maximum 2 MiB
-expanded     optional later high-quality web JPEG, roughly 2-3 MB
-downloadJpeg optional later public download, up to roughly 20 MB
-sourceJpeg   required private copy of every uploaded JPEG
-master       optional future private RAW/RAF/TIFF/panorama
+thumb     contact sheets and album cards, max 640 px, target <= 300 KB
+display   normal album viewer, max 2000 px, target around 1 MB, API max 2 MiB
+expanded  sanitized uploaded JPEG, max 20 MiB
 ```
 
-The public site uses only `thumb` and `display` today. It never receives private R2
-keys, `sourceJpeg`, or `master`. Public download controls remain a later feature.
+The uploaded JPEG is the `expanded` web tier. It is not duplicated as a private
+`sourceJpeg`. Full 20-50 MB originals, RAW/RAF/TIFF files, and scans remain in the
+owner's Google Drive archive for now. The `sourceJpeg` and `master` enum values remain
+reserved for a later private archive integration.
 
-## Implemented Upload Slice
+## Upload Flow
 
 ```txt
-selected source JPEG
-  -> browser validates JPEG and dimensions
-  -> browser creates thumb and display JPEGs
-  -> protected Worker verifies MIME, JPEG magic bytes, sizes, and dimensions
-  -> Worker writes sourceJpeg to private R2
-  -> Worker writes thumb/display to public R2
-  -> Worker writes Photo, AlbumPhoto, three Assets, and UploadJob to D1
+admin selects one or many JPEGs
+  -> browser decodes dimensions and EXIF orientation
+  -> browser creates sRGB thumb and display JPEGs
+  -> browser losslessly removes unsafe metadata from expanded JPEG
+  -> orientation != 1 is normalized by a full-size browser re-encode
+  -> protected Worker validates MIME, JPEG signatures, byte limits, and dimensions
+  -> Worker rejects expanded JPEGs that still contain unsafe metadata
+  -> Worker writes thumb/display/expanded to yakov-public-assets
+  -> Worker writes Photo, AlbumPhoto, three Asset rows, and UploadJob to D1
 ```
 
-R2 writes happen before the D1 batch. A failed D1 write triggers compensating deletion
-of newly written R2 objects. `clientUploadId` makes completed retries idempotent.
+R2 writes happen before the D1 batch. A failed database write triggers compensating
+deletion of newly written objects. A stable `clientUploadId` makes a completed retry
+idempotent.
 
-Browser canvas output strips source EXIF from public derivatives and gives predictable
-web delivery. The private source stays byte-for-byte unchanged, including its embedded
-profile and private metadata.
+Batch files are processed sequentially to keep browser memory predictable. A bad file is
+marked failed without cancelling the remaining files.
 
-## Storage Policy
+## Metadata And Color
 
-Retaining 3,600 source JPEGs at 3-5 MB each would require roughly 11-18 GB before
-derivatives. The admin therefore totals all recorded asset bytes and warns at an 8 GiB
-working budget. This is not a destructive quota: the owner can prepare smaller sources
-or move to paid R2. The uploader never silently drops `sourceJpeg`.
+Public JPEGs never retain EXIF, XMP, IPTC/Photoshop, comments, or unknown APP metadata.
+JFIF, ICC profile segments, and Adobe JPEG markers are preserved when the expanded
+file can be sanitized without re-encoding. The browser-generated `thumb` and `display`
+tiers are normalized to sRGB.
 
-## Color And Metadata
+This prevents GPS and sensitive camera metadata from reaching public R2 while avoiding
+an unnecessary second lossy encode of a normally oriented expanded JPEG.
 
-- `thumb` and `display` target predictable sRGB-oriented web output;
-- `sourceJpeg` preserves the uploaded bytes and embedded profile;
-- public derivatives strip EXIF through browser re-encoding;
-- exact GPS and sensitive EXIF are never exposed publicly;
-- Display P3 can be evaluated later with explicit fallback tests;
-- do not upscale a 2000 px source just to reach a byte target.
+## Public Delivery
 
-## Delivery Rules
+- grids and cards load `thumb`;
+- ordinary viewer mode loads `display`;
+- the viewer `+` action lazy-loads `expanded`;
+- all viewer modes preserve the complete frame and never crop it;
+- `Allow JPEG download` is an album-level policy;
+- when enabled, Download streams the same expanded object through a public Worker route
+  with an attachment filename;
+- when disabled, the download route returns 404, but `+` still works.
 
-- grids load `thumb`, never source or full display unnecessarily;
-- album viewer loads `display`;
-- width and height are known before render;
-- fullscreen fit uses `object-fit: contain` and never crops;
-- fixed derivative profiles are used instead of arbitrary user-provided transform sizes;
-- private files are streamed only through owner-protected admin routes.
+Every public query requires both the album and photo to be `published`. Hidden, draft,
+review, Bin, and deleted records do not render publicly.
 
-## Future Work
+## Future Extensions
 
-- move derivative processing server-side or to a queue if browser processing becomes a
-  consistency or performance problem;
-- add `expanded` only when the source contains enough useful detail;
-- add optional `downloadJpeg` policy at global, album, and photo level;
-- attach selected RAW/RAF/TIFF files as private `master` assets;
-- add Google Drive import/synchronization only after the D1/R2 upload path is stable.
+- optional private `master` attachments from Google Drive;
+- optional separate `downloadJpeg` when download and expanded should diverge;
+- server/queue derivative processing if browser processing becomes inconsistent;
+- crop-specific cover assets;
+- selected collaborator access to private masters.
+
+No future extension should require changing the canonical `Photo`, `AlbumPhoto`, or
+`Asset` relationships.

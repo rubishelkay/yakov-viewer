@@ -45,6 +45,7 @@ type AlbumRow = {
   cover_landscape_asset_id: string | null;
   cover_portrait_asset_id: string | null;
   cover_square_asset_id: string | null;
+  cover_priority: ArchiveAlbum["coverPriority"] | null;
   sort_order: number;
   photo_order_direction: ArchiveAlbum["photoOrderDirection"] | null;
   date_start: string | null;
@@ -131,6 +132,16 @@ export async function readD1Archive(db: Database): Promise<AdminArchive> {
   const setRows = rows<SetRow>(setResult);
   const albumRows = rows<AlbumRow>(albumResult);
   const photoRows = rows<PhotoRow>(photoResult);
+  const uploadRows = rows<{
+    id: string;
+    album_id: string;
+    photo_id: string | null;
+    file_name: string;
+    status: AdminArchive["uploadJobs"][number]["status"];
+    progress: number;
+    bytes: number;
+    created_at: string;
+  }>(uploadResult);
   const albumPhotoRows = rows<RelationRow>(albumPhotoResult);
   const assetRows = rows<AssetRow>(assetResult);
   const setAlbumRows = rows<SetAlbumRow>(setAlbumResult);
@@ -142,6 +153,11 @@ export async function readD1Archive(db: Database): Promise<AdminArchive> {
   const photoTags = groupBy(photoTagRows, (row) => row.photo_id ?? "");
   const photoAssets = groupBy(assetRows.filter((row) => row.photo_id), (row) => row.photo_id ?? "");
   const collectionPhotos = groupBy(collectionPhotoRows, (row) => row.collection_id);
+  const uploadByPhotoId = new Map(
+    uploadRows
+      .filter((row): row is typeof row & { photo_id: string } => Boolean(row.photo_id))
+      .map((row) => [row.photo_id, row])
+  );
   const albumSetIds = new Map<string, string[]>();
 
   for (const row of setAlbumRows) {
@@ -175,7 +191,12 @@ export async function readD1Archive(db: Database): Promise<AdminArchive> {
       position: row.position,
       createdAt: row.created_at
     })),
-    photos: photoRows.map((row) => mapPhoto(row, photoTags, photoAssets)),
+    photos: photoRows.map((row) => mapPhoto(
+      row,
+      photoTags,
+      photoAssets,
+      uploadByPhotoId.get(row.id)
+    )),
     assets: assetRows.map(mapAsset),
     tags: rows<{
       id: string;
@@ -227,6 +248,8 @@ export async function readD1Archive(db: Database): Promise<AdminArchive> {
       purge_after: string;
       file_count: number;
       bytes: number;
+      restore_status: ArchiveStatus | null;
+      restore_payload: string | null;
     }>(trashResult).map((row) => ({
       id: row.id,
       entityType: row.entity_type,
@@ -235,22 +258,15 @@ export async function readD1Archive(db: Database): Promise<AdminArchive> {
       deletedAt: row.deleted_at,
       purgeAfter: row.purge_after,
       fileCount: row.file_count,
-      bytes: row.bytes
+      bytes: row.bytes,
+      restoreStatus: optional(row.restore_status),
+      ...readTrashRestorePayload(row.restore_payload)
     })),
-    uploadJobs: rows<{
-      id: string;
-      album_id: string;
-      photo_id: string | null;
-      file_name: string;
-      status: AdminArchive["uploadJobs"][number]["status"];
-      progress: number;
-      bytes: number;
-      created_at: string;
-    }>(uploadResult).map((row) => ({
+    uploadJobs: uploadRows.map((row) => ({
       id: row.id,
       albumId: row.album_id,
       photoId: optional(row.photo_id),
-      fileName: row.file_name,
+      fileName: normalizeUploadFileName(row.file_name),
       status: row.status,
       progress: row.progress,
       bytes: row.bytes,
@@ -271,10 +287,11 @@ export async function createD1Album(
   input: {
     title: string;
     subtitle?: string;
-    status?: ArchiveStatus;
+    status?: Exclude<ArchiveStatus, "trash" | "deleted">;
     publicDownloadPolicy?: PublicDownloadPolicy;
   }
 ): Promise<ArchiveAlbum> {
+  const settings = await readD1Settings(db);
   const timestamp = new Date().toISOString();
   const slug = await uniqueSlug(db, "archive_albums", input.title);
   const id = `album-${slug}-${crypto.randomUUID().slice(0, 8)}`;
@@ -287,11 +304,12 @@ export async function createD1Album(
     title: input.title.trim(),
     subtitle: input.subtitle?.trim() ?? "",
     description: "",
-    status: input.status ?? defaultAdminSettings.defaultAlbumStatus,
+    status: input.status ?? settings.defaultAlbumStatus,
     isDemo: false,
     setIds: [],
     tagIds: [],
-    publicDownloadPolicy: input.publicDownloadPolicy ?? defaultAdminSettings.publicDownloadMode,
+    publicDownloadPolicy: input.publicDownloadPolicy ?? settings.publicDownloadMode,
+    coverPriority: "landscape",
     sortOrder: orderRow?.next_order ?? 0,
     photoOrderDirection: "forward",
     createdAt: timestamp,
@@ -327,16 +345,17 @@ export async function createD1Album(
 export async function createD1PhotoUpload(
   env: Pick<
     CloudflareEnv,
-    "DB" | "PRIVATE_ASSETS" | "PUBLIC_ASSETS" | "NEXT_PUBLIC_ASSET_BASE_URL"
+    "DB" | "PUBLIC_ASSETS" | "NEXT_PUBLIC_ASSET_BASE_URL"
   >,
   input: {
     albumId: string;
     clientUploadId: string;
     display: { file: File; height: number; width: number };
     height: number;
-    source: File;
-    sourceBytes: number;
-    sourceFileName: string;
+    expanded: File;
+    expandedBytes: number;
+    expandedColorProfile: "preserve" | "srgb";
+    expandedFileName: string;
     thumb: { file: File; height: number; width: number };
     title?: string;
     width: number;
@@ -360,11 +379,12 @@ export async function createD1PhotoUpload(
     .first<{ id: string }>();
   if (!album) throw new ArchiveWriteError("album_not_found", "Album was not found.", 404);
 
+  const settings = await readD1Settings(env.DB);
   const timestamp = new Date().toISOString();
-  const baseTitle = input.title?.trim() || stripExtension(input.sourceFileName) || "Untitled photo";
+  const baseTitle = input.title?.trim() || stripExtension(input.expandedFileName) || "Untitled photo";
   const slug = await uniqueSlug(env.DB, "archive_photos", baseTitle);
   const assetStem = `asset-${input.clientUploadId}`;
-  const sourceAssetId = `${assetStem}-sourceJpeg`;
+  const expandedAssetId = `${assetStem}-expanded`;
   const thumbAssetId = `${assetStem}-thumb`;
   const displayAssetId = `${assetStem}-display`;
   const uploadId = `upload-${input.clientUploadId}`;
@@ -373,22 +393,23 @@ export async function createD1PhotoUpload(
     .bind(album.id)
     .first<{ next_position: number }>();
   const position = positionRow?.next_position ?? 1;
-  const sourceKey = `source-jpeg/${album.id}/${photoId}/${safeFileName(input.sourceFileName)}`;
+  const expandedKey = `expanded/${album.id}/${photoId}/${safeFileName(input.expandedFileName)}`;
   const thumbKey = `thumb/${album.id}/${photoId}.jpg`;
   const displayKey = `display/${album.id}/${photoId}.jpg`;
   const publicBaseUrl = env.NEXT_PUBLIC_ASSET_BASE_URL.replace(/\/$/, "");
-  const sourceAsset: ArchiveAsset = {
-    id: sourceAssetId,
+  const expandedAsset: ArchiveAsset = {
+    id: expandedAssetId,
     photoId,
-    version: "sourceJpeg",
-    access: "private",
-    bucket: "yakov-private-assets",
-    key: sourceKey,
+    version: "expanded",
+    access: "public",
+    bucket: "yakov-public-assets",
+    key: expandedKey,
+    publicUrl: `${publicBaseUrl}/${expandedKey}`,
     width: input.width,
     height: input.height,
-    bytes: input.source.size,
+    bytes: input.expanded.size,
     mimeType: "image/jpeg",
-    colorProfile: "preserve",
+    colorProfile: input.expandedColorProfile,
     createdAt: timestamp
   };
   const thumbAsset: ArchiveAsset = {
@@ -421,15 +442,20 @@ export async function createD1PhotoUpload(
     colorProfile: "srgb",
     createdAt: timestamp
   };
-  const assets: ArchiveAsset[] = [thumbAsset, displayAsset, sourceAsset];
+  const assets: ArchiveAsset[] = [thumbAsset, displayAsset, expandedAsset];
   const storedObjects: Array<{ bucket: CloudflareEnv["PUBLIC_ASSETS"]; key: string }> = [];
 
   try {
-    await env.PRIVATE_ASSETS.put(sourceKey, input.source, {
-      httpMetadata: { contentType: "image/jpeg" },
-      customMetadata: { albumId: album.id, originalFileName: input.sourceFileName, photoId }
+    await env.PUBLIC_ASSETS.put(expandedKey, input.expanded, {
+      httpMetadata: { cacheControl: "public, max-age=31536000, immutable", contentType: "image/jpeg" },
+      customMetadata: {
+        albumId: album.id,
+        originalFileName: input.expandedFileName,
+        photoId,
+        version: "expanded"
+      }
     });
-    storedObjects.push({ bucket: env.PRIVATE_ASSETS, key: sourceKey });
+    storedObjects.push({ bucket: env.PUBLIC_ASSETS, key: expandedKey });
     await env.PUBLIC_ASSETS.put(thumbKey, input.thumb.file, {
       httpMetadata: { cacheControl: "public, max-age=31536000, immutable", contentType: "image/jpeg" },
       customMetadata: { albumId: album.id, photoId, version: "thumb" }
@@ -460,7 +486,7 @@ export async function createD1PhotoUpload(
         photoId,
         slug,
         baseTitle,
-        defaultAdminSettings.defaultPhotoStatus,
+        settings.defaultPhotoStatus,
         position,
         input.width,
         input.height,
@@ -494,7 +520,7 @@ export async function createD1PhotoUpload(
         INSERT INTO upload_jobs (
           id, album_id, photo_id, file_name, status, progress, bytes, created_at, updated_at
         ) VALUES (?, ?, ?, ?, 'review', 100, ?, ?, ?)
-      `).bind(uploadId, album.id, photoId, input.sourceFileName, input.sourceBytes, timestamp, timestamp),
+      `).bind(uploadId, album.id, photoId, input.expandedFileName, input.expandedBytes, timestamp, timestamp),
       env.DB.prepare(`
         UPDATE archive_albums
         SET cover_landscape_asset_id = COALESCE(cover_landscape_asset_id, ?),
@@ -519,7 +545,7 @@ export async function createD1PhotoUpload(
     slug,
     title: baseTitle,
     description: "",
-    status: defaultAdminSettings.defaultPhotoStatus,
+    status: settings.defaultPhotoStatus,
     frameNumber: position,
     tagIds: [],
     assetIds: assets.map((asset) => asset.id),
@@ -533,16 +559,16 @@ export async function createD1PhotoUpload(
   return {
     photo,
     albumPhoto: { albumId: album.id, photoId, position, createdAt: timestamp },
-    asset: sourceAsset,
+    asset: expandedAsset,
     assets,
     uploadJob: {
       id: uploadId,
       albumId: album.id,
       photoId,
-      fileName: input.sourceFileName,
+      fileName: input.expandedFileName,
       status: "review" as const,
       progress: 100,
-      bytes: input.sourceBytes,
+      bytes: input.expandedBytes,
       derivatives: assets.map((asset) => ({
         version: asset.version,
         status: "done" as const,
@@ -560,16 +586,17 @@ async function readExistingPhotoUpload(db: Database, photoId: string, clientUplo
   const albumPhoto = archive.albumPhotos.find((item) => item.photoId === photoId);
   const assets = archive.assets.filter((item) => item.photoId === photoId);
   const uploadJob = archive.uploadJobs.find((item) => item.id === `upload-${clientUploadId}`);
-  const sourceAsset = assets.find((asset) => asset.version === "sourceJpeg");
+  const expandedAsset = assets.find((asset) => asset.version === "expanded")
+    ?? assets.find((asset) => asset.version === "sourceJpeg");
   const previewAsset = assets.find((asset) => asset.version === "display");
-  if (!photo || !albumPhoto || !sourceAsset || !previewAsset || !uploadJob) {
+  if (!photo || !albumPhoto || !expandedAsset || !previewAsset || !uploadJob) {
     throw new ArchiveWriteError("upload_incomplete", "The previous upload is incomplete.", 409);
   }
 
   return {
     photo,
     albumPhoto,
-    asset: sourceAsset,
+    asset: expandedAsset,
     assets,
     uploadJob: {
       ...uploadJob,
@@ -632,6 +659,7 @@ function mapAlbum(
     coverLandscapeAssetId: optional(row.cover_landscape_asset_id),
     coverPortraitAssetId: optional(row.cover_portrait_asset_id),
     coverSquareAssetId: optional(row.cover_square_asset_id),
+    coverPriority: row.cover_priority ?? "landscape",
     sortOrder: row.sort_order,
     photoOrderDirection: row.photo_order_direction ?? "forward",
     dateStart: optional(row.date_start),
@@ -649,7 +677,8 @@ function mapAlbum(
 function mapPhoto(
   row: PhotoRow,
   photoTags: Map<string, TagRefRow[]>,
-  photoAssets: Map<string, AssetRow[]>
+  photoAssets: Map<string, AssetRow[]>,
+  upload?: { bytes: number; file_name: string }
 ): ArchivePhoto {
   return {
     id: row.id,
@@ -665,6 +694,9 @@ function mapPhoto(
     locationText: optional(row.location_text),
     width: row.width,
     height: row.height,
+    sourceFileName: upload ? normalizeUploadFileName(upload.file_name) : undefined,
+    sourceBytes: upload?.bytes,
+    mimeType: upload ? "image/jpeg" : undefined,
     dominantColor: row.dominant_color,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -704,6 +736,32 @@ function readSettings(values: Array<{ key: string; value: string }>) {
   }
 }
 
+async function readD1Settings(db: Database) {
+  const row = await db.prepare("SELECT value FROM admin_settings WHERE key = 'archive'")
+    .first<{ value: string }>();
+  if (!row) return defaultAdminSettings;
+  try {
+    return adminSettingsSchema.parse(JSON.parse(row.value));
+  } catch {
+    return defaultAdminSettings;
+  }
+}
+
+function readTrashRestorePayload(value: string | null) {
+  if (!value) return {};
+
+  try {
+    return trashRestorePayloadSchema.parse(JSON.parse(value));
+  } catch {
+    return {};
+  }
+}
+
+const trashRestorePayloadSchema = adminArchiveSchema.shape.trash.element.pick({
+  restorePhotoStatuses: true,
+  restoreSetRefs: true
+}).partial();
+
 async function uniqueSlug(db: Database, table: "archive_albums" | "archive_photos", title: string) {
   const base = slugify(title) || "untitled";
   const matches = await db
@@ -730,6 +788,12 @@ function slugify(value: string) {
 function safeFileName(value: string) {
   const normalized = value.normalize("NFKD").replace(/[^a-zA-Z0-9._-]+/g, "-");
   return normalized.replace(/^-+|-+$/g, "") || "upload.jpg";
+}
+
+function normalizeUploadFileName(value: string) {
+  return value.replace(/(?:\.jpe?g){2,}$/i, (extensions) => (
+    extensions.toLowerCase().includes(".jpeg") ? ".jpeg" : ".jpg"
+  ));
 }
 
 function stripExtension(value: string) {

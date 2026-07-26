@@ -11,10 +11,11 @@
     "d1:migrate:local": "wrangler d1 migrations apply yakov_archive --local",
     "validate:content": "node --import tsx scripts/validate-content.ts",
     "test:admin-auth": "node --conditions=react-server --import tsx --test tests/admin-auth.test.ts",
+    "test:image-pipeline": "node --import tsx --test tests/jpeg-metadata.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
     "build": "next build",
-    "check": "pnpm validate:content && pnpm typecheck && pnpm test:admin-auth && pnpm lint && pnpm build"
+    "check": "pnpm validate:content && pnpm typecheck && pnpm test:admin-auth && pnpm test:image-pipeline && pnpm lint && pnpm build"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.20.1",

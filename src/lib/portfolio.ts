@@ -7,6 +7,7 @@ export type PublicTag = {
 
 export type PublicAlbumSummary = {
   coverUrl: string;
+  filterTags: PublicTag[];
   id: string;
   kind: "film" | "digital";
   photoCount: number;
@@ -19,6 +20,8 @@ export type PublicAlbumSummary = {
 
 export type PublicPhoto = {
   displayUrl: string;
+  downloadUrl?: string;
+  expandedUrl: string;
   height: number;
   id: string;
   thumbUrl: string;
@@ -41,6 +44,7 @@ const albumSummaries = orderedManifestAlbums.map<PublicAlbumSummary>((album) => 
 
   return {
     coverUrl: getPortfolioAssetUrl(coverImage.thumbKey),
+    filterTags: tagLabels.map((label) => ({ label, slug: slugify(label) })),
     id: album.id,
     kind: album.type,
     photoCount: album.images.length,
@@ -85,6 +89,7 @@ export function getPublicAlbumBySlug(slug: string): PublicAlbumDetail | undefine
       .sort((a, b) => a.position - b.position)
       .map((image) => ({
         displayUrl: getPortfolioAssetUrl(image.srcKey),
+        expandedUrl: getPortfolioAssetUrl(image.srcKey),
         height: image.height,
         id: image.id,
         thumbUrl: getPortfolioAssetUrl(image.thumbKey),

@@ -16,7 +16,9 @@ import {
 } from "lucide-react";
 
 import {
+  formatBytes,
   getAlbumCoverPreviewUrlFromArchive,
+  getAlbumPhotosForPhotoFromArchive,
   getEffectivePhotoTagIdsFromArchive,
   getOrderedAlbumsFromArchive,
   getOrderedSetsFromArchive,
@@ -24,20 +26,16 @@ import {
   getPhotoThumbnailUrlFromArchive,
   getPhotosForAlbumFromArchive,
   useAdminArchive
-} from "@/admin/admin-state";
-import { formatBytes } from "@/admin/repository";
+} from "@/admin/cloud-admin-state";
 import { AdminDemoBadge } from "@/components/admin/AdminDemoBadge";
 import { useAdminConfirmDialog } from "@/components/admin/AdminConfirmDialog";
 import type {
   ArchiveStatus,
-  PhotoOrderDirection,
-  PublicDownloadPolicy
+  PhotoOrderDirection
 } from "@/admin/archive-schema";
-import type { LocalArchiveAlbum, LocalArchivePhoto, LocalArchivePhotoInAlbum, LocalArchiveTag } from "@/admin/admin-state";
+import type { LocalArchiveAlbum, LocalArchivePhoto, LocalArchivePhotoInAlbum, LocalArchiveTag } from "@/admin/cloud-admin-state";
 
 const editableStatuses: ArchiveStatus[] = ["draft", "review", "published", "hidden"];
-const downloadPolicies: PublicDownloadPolicy[] = ["inherit", "none", "expanded", "downloadJpeg"];
-
 export function AlbumWorkspace() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const draggingAlbumIdRef = useRef("");
@@ -66,7 +64,11 @@ export function AlbumWorkspace() {
   const selectedPhotoIndex = selectedPhoto
     ? selectedPhotos.findIndex((photo) => photo.id === selectedPhoto.id)
     : -1;
-  const selectedJobs = archive.uploadJobs.filter((job) => job.albumId === selectedAlbum?.id);
+  const albumJobs = archive.uploadJobs.filter((job) => job.albumId === selectedAlbum?.id);
+  const selectedJobs = albumJobs.filter((job) =>
+    ["queued", "uploading", "processing", "failed"].includes(job.status)
+  );
+  const completedUploadCount = albumJobs.filter((job) => job.status === "review").length;
   const selectedTags = selectedAlbum
     ? selectedAlbum.tagIds
         .map((tagId) => archive.tags.find((tag) => tag.id === tagId))
@@ -87,12 +89,12 @@ export function AlbumWorkspace() {
     setIsSetPickerOpen(false);
   }
 
-  function createAlbum() {
+  async function createAlbum() {
     const trimmedTitle = newAlbumTitle.trim();
     if (!trimmedTitle) return;
 
-    const albumId = actions.createAlbum({ title: trimmedTitle });
-    selectAlbum(albumId);
+    const albumId = await actions.createAlbum({ title: trimmedTitle });
+    if (albumId) selectAlbum(albumId);
     setNewAlbumTitle("");
   }
 
@@ -104,8 +106,11 @@ export function AlbumWorkspace() {
     if (!files.length) return;
 
     setIsUploading(true);
-    await actions.addPhotosToAlbum(selectedAlbum.id, files);
-    setIsUploading(false);
+    try {
+      await actions.addPhotosToAlbum(selectedAlbum.id, files);
+    } finally {
+      setIsUploading(false);
+    }
   }
 
   async function resolveTagId(label: string) {
@@ -124,7 +129,7 @@ export function AlbumWorkspace() {
       title: "Create new tag"
     });
 
-    return shouldCreate ? actions.createTag({ label: normalizedLabel, scope: "both" }) : "";
+    return shouldCreate ? await actions.createTag({ label: normalizedLabel, scope: "both" }) : "";
   }
 
   async function attachPhotoTagFromInput(label = photoTagInput) {
@@ -145,30 +150,30 @@ export function AlbumWorkspace() {
       tone: "danger"
     });
 
-    if (confirmed) actions.trashAlbum(album.id);
+    if (confirmed) await actions.trashAlbum(album.id);
   }
 
   async function trashPhoto(photo: LocalArchivePhoto) {
+    const appearances = getAlbumPhotosForPhotoFromArchive(archive, photo.id);
+    const linked = appearances.length > 1;
     const confirmed = await confirm({
-      confirmLabel: "Delete image",
-      message: `Move "${photo.title}" to the Bin? It will disappear from this album until restored.`,
-      title: "Delete image",
+      confirmLabel: linked ? "Remove from album" : "Delete image",
+      message: linked
+        ? `Remove "${photo.title}" from "${selectedAlbum?.title}"? The same stored photo remains in ${appearances.length - 1} other album${appearances.length === 2 ? "" : "s"}.`
+        : `Move "${photo.title}" to the Bin? It will disappear from the public site until restored.`,
+      title: linked ? "Remove linked photo" : "Delete image",
       tone: "danger"
     });
 
-    if (confirmed) actions.trashPhoto(photo.id);
+    if (!confirmed) return;
+    if (linked && selectedAlbum) await actions.removePhotoFromAlbum(selectedAlbum.id, photo.id);
+    else await actions.trashPhoto(photo.id);
   }
 
   function moveAlbumToDropTarget(albumId: string, targetAlbumId: string) {
-    const currentIndex = albums.findIndex((album) => album.id === albumId);
     const targetIndex = albums.findIndex((album) => album.id === targetAlbumId);
-
-    if (currentIndex < 0 || targetIndex < 0 || currentIndex === targetIndex) return;
-
-    const direction = currentIndex < targetIndex ? "down" : "up";
-    for (let step = 0; step < Math.abs(targetIndex - currentIndex); step += 1) {
-      actions.reorderAlbum(albumId, direction);
-    }
+    if (targetIndex < 0 || albumId === targetAlbumId) return;
+    actions.moveAlbumToPosition(albumId, targetIndex);
   }
 
   return (
@@ -190,13 +195,13 @@ export function AlbumWorkspace() {
               aria-label="New album title"
               onChange={(event) => setNewAlbumTitle(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === "Enter") createAlbum();
+                if (event.key === "Enter") void createAlbum();
               }}
               placeholder="Album title"
               value={newAlbumTitle}
             />
           </label>
-          <button className="admin-button" onClick={createAlbum} type="button">
+          <button className="admin-button" onClick={() => void createAlbum()} type="button">
             <FolderPlus aria-hidden />
             Create
           </button>
@@ -303,14 +308,19 @@ export function AlbumWorkspace() {
                   {editableStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
                 </select>
               </Field>
-              <Field label="Download">
-                <select
-                  value={selectedAlbum.publicDownloadPolicy}
-                  onChange={(event) => actions.updateAlbum(selectedAlbum.id, { publicDownloadPolicy: event.target.value as PublicDownloadPolicy })}
-                >
-                  {downloadPolicies.map((policy) => <option key={policy} value={policy}>{policy}</option>)}
-                </select>
-              </Field>
+              <label className="admin-setting-row admin-setting-row--control">
+                <span>Allow JPEG download</span>
+                <input
+                  checked={
+                    selectedAlbum.publicDownloadPolicy === "expanded" ||
+                    selectedAlbum.publicDownloadPolicy === "downloadJpeg"
+                  }
+                  onChange={(event) => actions.updateAlbum(selectedAlbum.id, {
+                    publicDownloadPolicy: event.target.checked ? "expanded" : "none"
+                  })}
+                  type="checkbox"
+                />
+              </label>
               <Field label="Frame order">
                 <select
                   value={selectedAlbum.photoOrderDirection}
@@ -427,8 +437,8 @@ export function AlbumWorkspace() {
             >
               <ImagePlus aria-hidden />
               <div>
-                <strong>{isUploading ? "Preparing local previews" : "Drop JPEG files here"}</strong>
-                <p>The browser file order becomes the first album order.</p>
+                <strong>{isUploading ? "Preparing and uploading JPEGs" : "Drop JPEG files here"}</strong>
+                <p>Files upload in selection order. Keep this tab open until saving finishes.</p>
               </div>
               <input
                 accept="image/jpeg"
@@ -466,7 +476,11 @@ export function AlbumWorkspace() {
                   </div>
                 ))
               ) : (
-                <div className="admin-inline-empty">Upload jobs appear here after selecting JPEGs.</div>
+                <div className="admin-inline-empty">
+                  {completedUploadCount
+                    ? `${completedUploadCount} JPEG${completedUploadCount === 1 ? "" : "s"} saved to D1 + R2.`
+                    : "Upload jobs appear here after selecting JPEGs."}
+                </div>
               )}
             </div>
 
@@ -560,6 +574,7 @@ function PhotoInspector({
   const thumbAssetId = photo.assetIds.find((assetId) => assetId.endsWith("-thumb")) ?? displayAssetId;
   const imageUrl = getPhotoDisplayUrlFromArchive(archive, previewUrls, photo);
   const isHidden = photo.status === "hidden";
+  const appearanceCount = getAlbumPhotosForPhotoFromArchive(archive, photo.id).length;
   const isReversed = album.photoOrderDirection === "reverse";
   const displayPosition = photoIndex + 1;
   const fileSize = formatBytes(photo.sourceBytes ?? assetBytes(photo.id, archive.assets));
@@ -600,19 +615,11 @@ function PhotoInspector({
             {editableStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
           </select>
         </Field>
-        <Field label="Download override">
-          <select
-            value={photo.publicDownloadOverride ?? "inherit"}
-            onChange={(event) => {
-              const value = event.target.value as PublicDownloadPolicy;
-              actions.updatePhoto(photo.id, { publicDownloadOverride: value === "inherit" ? undefined : value });
-            }}
-          >
-            {downloadPolicies.map((policy) => <option key={policy} value={policy}>{policy}</option>)}
-          </select>
-        </Field>
         <Field label="File">
-          <input readOnly value={`${photo.sourceFileName ?? photo.slug}.jpg · ${photo.width}x${photo.height} · ${fileSize}`} />
+          <input
+            readOnly
+            value={`${photo.sourceFileName ?? `${photo.slug}.jpg`} · ${photo.width}x${photo.height} · ${fileSize}`}
+          />
         </Field>
       </div>
 
@@ -658,7 +665,7 @@ function PhotoInspector({
           </button>
           <button className="admin-danger-button" onClick={() => void onTrashPhoto(photo)} type="button">
             <CircleX aria-hidden />
-            Delete image
+            {appearanceCount > 1 ? "Remove from album" : "Delete image"}
           </button>
         </div>
       </div>

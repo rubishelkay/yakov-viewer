@@ -11,9 +11,11 @@ import {
   SlidersHorizontal
 } from "lucide-react";
 
-import { adminApiRoutes, publicApiRoutes } from "@/admin/api-contract";
-import { getTagUsageFromArchive, useAdminArchive } from "@/admin/admin-state";
-import { formatBytes } from "@/admin/repository";
+import {
+  formatBytes,
+  getTagUsageFromArchive,
+  useAdminArchive
+} from "@/admin/cloud-admin-state";
 import { useAdminConfirmDialog } from "@/components/admin/AdminConfirmDialog";
 import type {
   ArchiveStatus,
@@ -22,7 +24,7 @@ import type {
 } from "@/admin/archive-schema";
 
 const statuses: ArchiveStatus[] = ["draft", "review", "published", "hidden"];
-const downloadPolicies: PublicDownloadPolicy[] = ["inherit", "none", "expanded", "downloadJpeg"];
+const downloadPolicies: PublicDownloadPolicy[] = ["none", "expanded"];
 const tagScopes: TagScope[] = ["album", "photo", "both"];
 
 export function TagsPanel() {
@@ -38,11 +40,11 @@ export function TagsPanel() {
     return tag.label.toLowerCase().includes(needle) || tag.slug.includes(needle) || tag.scope.includes(needle);
   });
 
-  function createTag() {
+  async function createTag() {
     const trimmed = label.trim();
     if (!trimmed) return;
 
-    actions.createTag({ label: trimmed, scope });
+    await actions.createTag({ label: trimmed, scope });
     setLabel("");
     setScope("both");
   }
@@ -50,7 +52,7 @@ export function TagsPanel() {
   async function deleteTag(tagId: string, tagLabel: string) {
     const confirmed = await confirm({
       confirmLabel: "Delete tag",
-      message: `Delete "${tagLabel}" from the local dictionary? This is allowed only when the tag is unused.`,
+      message: `Delete "${tagLabel}" from the shared D1 dictionary? This is allowed only when the tag is unused.`,
       title: "Delete tag",
       tone: "danger"
     });
@@ -77,7 +79,7 @@ export function TagsPanel() {
               <input
                 onChange={(event) => setLabel(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter") createTag();
+                  if (event.key === "Enter") void createTag();
                 }}
                 placeholder="Bangkok, Film, Kodak..."
                 value={label}
@@ -89,7 +91,7 @@ export function TagsPanel() {
                 {tagScopes.map((item) => <option key={item} value={item}>{item}</option>)}
               </select>
             </label>
-            <button className="admin-button" onClick={createTag} type="button">
+            <button className="admin-button" onClick={() => void createTag()} type="button">
               <Plus aria-hidden />
               Add tag
             </button>
@@ -149,15 +151,14 @@ export function SettingsPanel() {
   const { confirm, dialog } = useAdminConfirmDialog();
   const settings = archive.settings;
 
-  async function resetLocalArchive() {
+  async function refreshArchive() {
     const confirmed = await confirm({
-      confirmLabel: "Reset archive",
-      message: "Reset localStorage and local preview blobs back to the seed archive?",
-      title: "Reset local archive",
-      tone: "danger"
+      confirmLabel: "Refresh",
+      message: "Reload the latest archive state from Cloudflare D1?",
+      title: "Refresh Cloudflare archive"
     });
 
-    if (confirmed) await actions.resetLocalArchive();
+    if (confirmed) await actions.refreshArchive();
   }
 
   return (
@@ -169,9 +170,9 @@ export function SettingsPanel() {
           <h1>Settings</h1>
           <p>Central defaults for image processing, downloads, statuses, color policy, and Bin retention.</p>
         </div>
-        <button className="admin-ghost-button" onClick={() => void resetLocalArchive()} type="button">
+        <button className="admin-ghost-button" onClick={() => void refreshArchive()} type="button">
           <RotateCcw aria-hidden />
-          Reset local archive
+          Refresh D1
         </button>
       </header>
 
@@ -212,26 +213,10 @@ export function SettingsPanel() {
             </div>
             <SlidersHorizontal aria-hidden />
           </div>
-          <EditableNumber
-            label="Expanded target"
-            suffix="MB"
-            step={0.1}
-            value={settings.expandedTargetMb}
-            onChange={(value) => actions.updateSettings({ expandedTargetMb: value })}
-          />
-          <EditableNumber
-            label="Download JPEG target"
-            suffix="MB"
-            step={0.1}
-            value={settings.downloadJpegTargetMb}
-            onChange={(value) => actions.updateSettings({ downloadJpegTargetMb: value })}
-          />
-          <EditableSelect
-            label="Color profile"
-            value={settings.derivativeColorProfile}
-            options={["srgb", "display-p3", "preserve"]}
-            onChange={(value) => actions.updateSettings({ derivativeColorProfile: value as typeof settings.derivativeColorProfile })}
-          />
+          <ReadOnlySetting label="Thumbnail" value="up to 300 KB / 640 px" />
+          <ReadOnlySetting label="Display" value="about 1 MB / 2000 px" />
+          <ReadOnlySetting label="Expanded" value="uploaded JPEG / up to 20 MB" />
+          <ReadOnlySetting label="Preview color" value="Browser-normalized sRGB" />
         </section>
 
         <section className="admin-panel">
@@ -248,32 +233,20 @@ export function SettingsPanel() {
             options={downloadPolicies}
             onChange={(value) => actions.updateSettings({ publicDownloadMode: value as PublicDownloadPolicy })}
           />
-          <label className="admin-setting-row admin-setting-row--control">
-            <span>Source JPEG public</span>
-            <input
-              checked={settings.sourceJpegPublicAllowed}
-              onChange={(event) => actions.updateSettings({ sourceJpegPublicAllowed: event.target.checked })}
-              type="checkbox"
-            />
-          </label>
-          <EditableSelect
-            label="Public EXIF policy"
-            value={settings.publicExifPolicy}
-            options={["strip-sensitive", "strip-all", "preserve"]}
-            onChange={(value) => actions.updateSettings({ publicExifPolicy: value as typeof settings.publicExifPolicy })}
-          />
+          <ReadOnlySetting label="Public metadata" value="Strip EXIF/XMP/IPTC; preserve ICC" />
         </section>
 
-        <section className="admin-panel admin-panel--api">
+        <section className="admin-panel">
           <div className="admin-panel__head">
             <div>
               <p className="admin-kicker">Cloudflare API</p>
-              <h2>Readiness</h2>
+              <h2>Storage contract</h2>
             </div>
-            <span className="admin-muted">local-first</span>
+            <span className="admin-muted">live</span>
           </div>
-          <ApiRouteList title="Admin" routes={adminApiRoutes} />
-          <ApiRouteList title="Public" routes={publicApiRoutes} />
+          <ReadOnlySetting label="Metadata" value="D1 yakov_archive" />
+          <ReadOnlySetting label="Media" value="R2 yakov-public-assets" />
+          <ReadOnlySetting label="Admin access" value="Cloudflare Access" />
         </section>
       </div>
     </div>
@@ -287,7 +260,7 @@ export function TrashPanel() {
   async function purgeItem(itemId: string, title: string) {
     const confirmed = await confirm({
       confirmLabel: "Purge permanently",
-      message: `Permanently purge "${title}" from the local archive? This simulates future R2 deletion.`,
+      message: `Permanently purge "${title}" from D1 and delete its unshared R2 objects? This cannot be undone.`,
       title: "Permanent purge",
       tone: "danger"
     });
@@ -302,7 +275,7 @@ export function TrashPanel() {
         <div>
           <p className="admin-kicker">Recoverable delete</p>
           <h1>Bin</h1>
-          <p>Items in the Bin are recoverable. Permanent delete is a separate confirmed action that later removes R2 objects.</p>
+          <p>Items in the Bin are recoverable. Purge permanently removes D1 records and unshared R2 objects.</p>
         </div>
       </header>
 
@@ -318,7 +291,7 @@ export function TrashPanel() {
                 </div>
                 <span>purge after {item.purgeAfter.slice(0, 10)}</span>
                 <div className="admin-row-actions">
-                  <button className="admin-ghost-button" onClick={() => actions.restoreItem(item.id)} type="button">
+                  <button className="admin-ghost-button" onClick={() => void actions.restoreItem(item.id)} type="button">
                     <ArchiveRestore aria-hidden />
                     Restore
                   </button>
@@ -392,16 +365,11 @@ function EditableNumber({
   );
 }
 
-function ApiRouteList({ title, routes }: { title: string; routes: Record<string, string> }) {
+function ReadOnlySetting({ label, value }: { label: string; value: string }) {
   return (
-    <div className="admin-api-routes">
-      <strong>{title}</strong>
-      {Object.entries(routes).map(([name, route]) => (
-        <code key={route}>
-          <span>{name}</span>
-          {route}
-        </code>
-      ))}
+    <div className="admin-setting-row">
+      <span>{label}</span>
+      <strong>{value}</strong>
     </div>
   );
 }

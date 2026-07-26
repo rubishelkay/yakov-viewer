@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 const createAlbumSchema = z.object({
   title: z.string().trim().min(1).max(160),
   subtitle: z.string().trim().max(320).optional(),
-  status: archiveStatusSchema.optional(),
+  status: archiveStatusSchema.exclude(["trash", "deleted"]).optional(),
   publicDownloadPolicy: publicDownloadPolicySchema.optional()
 });
 

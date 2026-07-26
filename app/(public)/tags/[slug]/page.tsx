@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { PortfolioTagPage } from "@/components/portfolio/PortfolioTagPage";
-import { getPublicAlbumsForTag, getPublicTagBySlug, getPublicTags } from "@/lib/portfolio";
+import {
+  readPublicAlbumsForTag,
+  readPublicTagBySlug
+} from "@/server/cloudflare/public-portfolio-d1";
 
-export function generateStaticParams() {
-  return getPublicTags().map((tag) => ({ slug: tag.slug }));
-}
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params
@@ -14,7 +15,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const tag = getPublicTagBySlug(slug);
+  const tag = await readPublicTagBySlug(slug);
 
   return {
     title: tag?.label ?? "Tag",
@@ -24,8 +25,8 @@ export async function generateMetadata({
 
 export default async function TagPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const tag = getPublicTagBySlug(slug);
+  const tag = await readPublicTagBySlug(slug);
   if (!tag) notFound();
 
-  return <PortfolioTagPage albums={getPublicAlbumsForTag(slug)} tag={tag} />;
+  return <PortfolioTagPage albums={await readPublicAlbumsForTag(slug)} tag={tag} />;
 }

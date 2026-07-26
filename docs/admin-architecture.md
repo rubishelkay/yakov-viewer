@@ -2,185 +2,93 @@
 
 ## Goal
 
-The admin is a private archive workspace on Cloudflare infrastructure. It should let the user:
+The admin is the owner-only workspace for the Yakov Viewer archive. It manages the same
+D1/R2 data rendered by the public portfolio and later reused by Logjamming.
 
-- create sets;
-- create albums;
-- upload photos into albums;
-- preserve upload order;
-- review images before publication;
-- edit metadata and tags;
-- create curated collections from photos across albums;
-- configure global media delivery defaults;
-- assign cover images;
-- hide individual photos;
-- publish albums;
-- delete photos and albums when needed;
-- keep unpublished material private.
-
-## Recommended Cloudflare Stack
+## Runtime
 
 ```txt
-Cloudflare Workers + OpenNext
-  Combined Next.js public site and protected admin
-  Dynamic admin API routes
-
-Cloudflare Access
-  Protects admin access for the owner email first
-
-Cloudflare Worker route handlers
-  Admin API
-  Upload orchestration
-  Signed upload URLs
-  Metadata writes
-  Delete/trash actions
-
-Cloudflare R2
-  Public display assets
-  Private large/private/master assets
-
-Cloudflare D1
-  Sets, albums, photos, tags, asset records, permissions, audit events
-
-Cloudflare Queues
-  Async image processing jobs
+/admin React UI
+  -> typed client actions
+  -> protected Next Route Handlers
+  -> D1 + R2 bindings
 ```
 
-Initial admin access can be protected through Cloudflare Access for:
+The admin and public site live in one Next.js/OpenNext Worker. Cloudflare Access and
+application JWT verification allow only `Jacobjshmol@gmail.com`.
+
+## Canonical Model
 
 ```txt
-Jacobjshmol@gmail.com
+Set
+  -> ordered Album memberships
+
+Album
+  -> ordered AlbumPhoto memberships
+
+Photo
+  -> canonical metadata and Assets
+
+Asset
+  -> thumb / display / expanded
+
+Tag
+  -> album or direct photo relationships
+
+Bin
+  -> restore payload/status and purge job
 ```
 
-Later phases may add application-level Google login for comments, selected downloads, and collaborator access.
+One Photo may appear in several Albums. Reusing it creates an AlbumPhoto membership,
+not another Photo or Asset. Purging an album removes media only when a photo has no
+remaining memberships.
 
-## Buckets
+## Working Screens
 
-Recommended buckets:
+- Dashboard: live archive/storage/status counts.
+- Albums: create, metadata, download policy, Sets, tags, covers, upload, order, status,
+  Bin.
+- Photos: global canonical library and multi-album memberships.
+- Sets: create, publish, order, and album membership.
+- Tags: controlled dictionary, usage, edit, safe delete.
+- Settings: active publication/download/Bin defaults and storage contract.
+- Bin: restore and permanent purge.
+
+There are no decorative upload controls or browser-only archive screens.
+
+## Upload And Publication
 
 ```txt
-yakov-public-assets
-yakov-private-assets
+create draft Album
+  -> sequential JPEG upload
+  -> three public R2 tiers
+  -> Photo defaults to review
+  -> review order/covers/tags
+  -> publish Photo and Album
+  -> attach to published Set for homepage
 ```
 
-`yakov-public-assets`:
+The album may remain outside Sets and still appear in `/albums`.
 
-- thumbnails;
-- display images;
-- cover crops;
-- optimized public expanded images;
-- optional optimized public download JPEGs;
-- public download files only when explicitly allowed.
+## Delete Semantics
 
-`yakov-private-assets`:
+- `hidden`: unavailable publicly, records and R2 objects remain.
+- `Bin`: unavailable publicly, restorable with prior status.
+- `purge`: irreversible D1 deletion plus deletion of unshared R2 objects.
+- unlink: removes only one AlbumPhoto membership.
 
-- staging uploads;
-- uploaded large JPEG source files;
-- private master files;
-- optional RAW/RAF/TIFF files for selected photos;
-- deleted/trash files before permanent purge.
+Every destructive action uses an explicit custom confirmation.
 
-Production public assets should use a custom domain such as:
+## Media Policy
 
-```txt
-assets.yakov.shmol.cc
-```
+Current uploads store public `thumb`, `display`, and `expanded`. The `expanded` tier is
+the sanitized input JPEG, not a duplicate private source. Full original scans and
+RAW/RAF/TIFF remain in Google Drive.
 
-Avoid using `r2.dev` for production delivery.
+The private R2 binding and `master` asset type remain available for a later owner-only
+archive extension.
 
-## Upload Flow
+## Operational Boundary
 
-```txt
-1. Admin creates or opens an album.
-2. Admin uploads a batch of JPEG files.
-3. API creates photo records in draft/review status.
-4. Browser/processing creates and stores public thumb and display assets.
-5. The uploaded source JPEG is stored as a private/admin asset only when retention is enabled.
-6. Later processing can add expanded preview, optional download JPEG, and cover-ready derivatives.
-7. Metadata is extracted and sanitized.
-8. Admin reviews ordering, visibility, metadata, and covers.
-9. Admin publishes the album.
-```
-
-The first implementation can process only JPEG uploads. RAW/RAF/TIFF support should be modeled but not required for the first working admin.
-
-The public site should not casually expose the original 5-30 MB uploaded JPEG. Public viewing should use optimized derivatives in most cases. Larger public download/open access can be enabled per album or per photo later.
-
-## Global Admin Settings
-
-The admin should include a compact settings area for defaults that can be changed later without code edits.
-
-Recommended settings:
-
-```txt
-defaultAlbumStatus: draft
-defaultPhotoStatus: review
-expandedTargetMb: 2-3
-publicDownloadMode: downloadJpeg
-downloadJpegTargetMb: 3-4
-sourceJpegPublicAllowed: false
-trashRetentionDays: 7
-derivativeColorProfile: srgb
-sourceJpegPolicy: preserve
-publicExifPolicy: stripSensitive
-```
-
-Album and photo settings can override global defaults where needed.
-
-The admin should still allow changing `publicDownloadMode` to `none`, `expanded`, or `downloadJpeg`.
-
-## Hidden Vs Delete
-
-`hidden`:
-
-- remove from public pages;
-- remove from sitemap and public archive;
-- keep files in R2;
-- keep record in admin;
-- allow restore to published.
-
-`trash`:
-
-- remove from public pages;
-- keep files temporarily;
-- allow restore for a grace period, for example 7 days;
-- when an album is moved to trash, its photo records and related public appearances should also become non-public.
-
-`delete`:
-
-- delete all related files from R2;
-- keep minimal audit metadata if useful;
-- cannot be undone after purge.
-
-If public files remain at stable public URLs, hidden photos may still be accessible by someone who already has the direct asset URL. That is acceptable for the early version unless stronger access control is explicitly required.
-
-Album delete should be a soft delete first:
-
-```txt
-confirm -> album to trash -> photos to trash -> collections hide affected photos -> purge later
-```
-
-The admin should show a clear confirmation dialog before trashing an album. Permanent purge from trash should be a separate action.
-
-## Shared Archive Principle
-
-The database and buckets should be designed as the source of truth for more than one app. Yakov Viewer and Logjamming should read from the same archive rather than duplicating uploads.
-
-This means the data model should avoid public-site-specific assumptions. A photo can exist privately before it belongs to any public portfolio view.
-
-## Admin Placement Options
-
-The first admin can be built in the same repository or as a separate app.
-
-Recommended first step:
-
-```txt
-same repository
-  /admin frontend
-  Cloudflare Access protection
-  Next route-handler API on the OpenNext Worker
-```
-
-This keeps the project easier to develop while preserving a clean separation between public pages and private API actions.
-
-The admin can be split into a separate app later if it grows into a heavier archive product.
+The database and R2 buckets are authoritative. Source-code fixtures exist only for
+validation/history. Secrets and image files never enter Git.

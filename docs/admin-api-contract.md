@@ -1,12 +1,25 @@
 # Admin API Contract
 
-## Purpose
+## Runtime
 
-The first admin UI uses local data. The next milestone adds OpenNext Route Handlers backed by D1 and R2; Queues remain optional until derivative processing needs them.
+The admin is a Cloudflare-backed application. D1 is the metadata source of truth and R2
+stores image objects. There is no runtime `localStorage` or IndexedDB archive adapter.
 
-This file records the first API shape so the UI, D1 schema, and Cloudflare bindings move in the same direction.
+All `/admin*` pages and `/api/admin/*` endpoints require a valid Cloudflare Access JWT
+for exactly `Jacobjshmol@gmail.com`. Local preview bypass is accepted only when all
+three conditions are true:
 
-## Implemented Admin Endpoints
+```txt
+ADMIN_ACCESS_ENABLED != true
+ADMIN_RUNTIME_ENV=local
+ADMIN_LOCAL_BYPASS=true
+```
+
+OpenNext rewrites the Host header in local preview, so the bypass cannot rely on Host.
+The two local-only variables live only in ignored `.dev.vars` and are absent from the
+production Worker; production additionally has `ADMIN_ACCESS_ENABLED=true`.
+
+## Read And Upload Endpoints
 
 ```txt
 GET  /api/admin/archive
@@ -14,122 +27,84 @@ GET  /api/admin/albums
 POST /api/admin/albums
 POST /api/admin/albums/:albumId/photos
 GET  /api/admin/assets/:assetId
+POST /api/admin/mutations
 ```
 
-These are typed Next.js Route Handlers using Worker bindings. The first upload path is
-direct multipart through the protected Worker. A signed/direct-to-R2 flow is a future
-optimization, not part of the first working contract.
+`GET /api/admin/archive` returns the normalized Set, Album, AlbumPhoto, Photo, Asset,
+Tag, Settings, Bin, and UploadJob state used by every admin screen.
 
-`GET /api/admin/archive` returns the complete normalized archive for the admin.
-
-`POST /api/admin/albums` accepts JSON:
+`POST /api/admin/albums` accepts:
 
 ```json
 {
   "title": "Film 073",
-  "subtitle": "Bangkok, 2025"
+  "subtitle": "Bangkok, 2025",
+  "status": "draft",
+  "publicDownloadPolicy": "none"
 }
 ```
 
-`POST /api/admin/albums/:albumId/photos` accepts `multipart/form-data` fields:
+`POST /api/admin/albums/:albumId/photos` accepts multipart fields:
 
 ```txt
-clientUploadId  UUID v4 retained for idempotent retry
-file            required source JPEG, preserved privately, maximum 20 MiB
-width/height    positive source dimensions
-thumb           generated JPEG, maximum 512 KiB
-thumbWidth/Height
-display         generated JPEG, maximum 2 MiB
-displayWidth/Height
-title           optional
+clientUploadId       UUID v4 for idempotent retry
+file                 sanitized expanded JPEG, max 20 MiB
+width / height       expanded dimensions
+expandedColorProfile preserve or srgb
+thumb                JPEG, max 512 KiB
+thumbWidth / Height
+display              JPEG, max 2 MiB
+displayWidth / Height
+title                optional
 ```
 
-The Worker checks MIME type and JPEG magic bytes for every uploaded file. It always
-writes real `thumb`/`display` files to public R2 and the unchanged source to private R2.
-It then creates canonical `Photo`, `AlbumPhoto`, three `Asset` rows, and one
-`UploadJob`. If an R2 or D1 step fails,
-newly written R2 objects are deleted. Repeating a completed request with the same
-`clientUploadId` returns the existing result without adding another photo.
+The Worker writes real `thumb`, `display`, and `expanded` objects to
+`yakov-public-assets`. It creates one canonical Photo, one AlbumPhoto membership, three
+Asset rows, and one UploadJob. Retrying a completed `clientUploadId` returns the
+existing result.
 
-`GET /api/admin/assets/:assetId` streams an asset through the protected Worker. Private
-assets are returned with `Cache-Control: private, no-store`.
+`GET /api/admin/assets/:assetId` is an owner-protected inspector stream. It resolves the
+bucket from D1 and never accepts an arbitrary object key from the client.
 
-## Planned Mutation Endpoints
+## Mutation Endpoint
+
+`POST /api/admin/mutations` validates a discriminated action union. Implemented actions:
 
 ```txt
-PATCH  /api/admin/albums/:albumId
-PATCH  /api/admin/photos/:photoId
-POST   /api/admin/photos/:photoId/albums
-DELETE /api/admin/photos/:photoId/albums/:albumId
-POST   /api/admin/sets
-PATCH  /api/admin/sets/:setId
-POST   /api/admin/tags
-PATCH  /api/admin/settings
-POST   /api/admin/bin/:itemId/restore
-DELETE /api/admin/bin/:itemId
+albums    update, reorder/move, reverse order, covers, Bin
+photos    update, reorder, hide/publish, direct tags, Bin
+links     add/remove an existing photo from an album
+sets      create, update, reorder, add/remove/reorder albums, Bin
+tags      create, edit, attach/detach, delete when unused
+settings  update active defaults
+bin       restore with prior status, permanent purge
 ```
 
-The visible admin remains on the local repository until the essential mutation set is
-implemented. Activating a partial adapter would make some controls persistent and
-others browser-only, which is deliberately avoided.
+Purging removes unshared R2 objects and D1 records. Removing one AlbumPhoto membership
+does not delete the canonical photo or any assets. The final membership cannot be
+removed accidentally; the photo must go through Bin.
 
-Implemented infrastructure endpoint:
+## Public Contract
+
+Public pages read D1 directly on the server and return only published records and
+public assets:
 
 ```txt
-GET /api/health
+/                         albums in published Sets, ordered by Set and membership
+/albums                   all published albums
+/albums/:slug             published photos in album order
+/tags/:slug               published albums containing that album/effective photo tag
+/api/public/.../download  expanded JPEG only when policy allows it
 ```
 
-It reports only whether expected bindings are present and never returns IDs, values, keys, or secrets.
+No public response contains R2 credentials, private object keys, GPS, EXIF, XMP, IPTC,
+RAW, TIFF, or Google Drive links.
 
-## Shared Archive Shape
+## Error And Consistency Rules
 
-```txt
-Photo       -> canonical metadata and Asset ownership
-AlbumPhoto  -> albumId, photoId, album-specific position
-Album       -> publication, tags, covers, set membership
-```
-
-Adding an existing photo to another album creates only an `AlbumPhoto` row. Hiding or deleting a canonical photo affects every album appearance. Purging an album deletes media only for photos that have no remaining album memberships.
-
-## Public Endpoints
-
-```txt
-GET /api/public/sets
-GET /api/public/albums
-GET /api/public/photos
-```
-
-Public endpoints must only return published records and public asset URLs. They must never return private R2 keys, `sourceJpeg`, RAW/RAF/TIFF, or sensitive EXIF.
-
-Rules:
-
-- first upload milestone accepts JPEG only;
-- every new upload retains its source JPEG in private R2;
-- `thumb` and `display` are generated in the browser before upload and are recorded only
-  after real R2 objects exist;
-- album/photo records start as draft/review;
-- upload order becomes initial photo position;
-- later processing may move server-side and add optional `expanded` and `downloadJpeg`.
-
-## Access
-
-On localhost, explicit ignored variables `ADMIN_RUNTIME_ENV=local` and
-`ADMIN_LOCAL_BYPASS=true` enable development. The bypass additionally checks that the
-request Host is localhost/127.0.0.1/::1. On external deployments the bypass variables
-are absent. Every admin request verifies the Cloudflare Access JWT signature, issuer,
-audience, expiry, and exact owner email with Cloudflare's remote JWK set. Missing or
-invalid Access configuration fails closed. Production `workers.dev` and version preview
-URLs are disabled so the protected custom hostname is the only external route.
-
-## Secrets
-
-Do not commit tokens or keys. Use Cloudflare bindings and secrets:
-
-```txt
-DB
-PUBLIC_ASSETS
-PRIVATE_ASSETS
-IMAGE_PROCESSING
-```
-
-Cloudflare Access should protect `/admin` before production use.
+- API responses use `{ ok, data }` or `{ ok: false, error }`;
+- all JSON and mutation bodies are Zod-validated;
+- writes fail closed when Access configuration is missing or invalid;
+- public mutation success revalidates the public route tree;
+- Bin restore preserves the previous entity status;
+- D1 foreign keys must remain clean after migration, restore, and purge.

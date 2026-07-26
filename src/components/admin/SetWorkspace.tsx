@@ -19,13 +19,13 @@ import {
   getOrderedSetsFromArchive,
   getPhotosForAlbumFromArchive,
   useAdminArchive
-} from "@/admin/admin-state";
+} from "@/admin/cloud-admin-state";
 import type {
   ArchiveStatus
 } from "@/admin/archive-schema";
 import { AdminDemoBadge } from "@/components/admin/AdminDemoBadge";
 import { useAdminConfirmDialog } from "@/components/admin/AdminConfirmDialog";
-import type { LocalArchiveAlbum } from "@/admin/admin-state";
+import type { LocalArchiveAlbum } from "@/admin/cloud-admin-state";
 
 const editableStatuses: ArchiveStatus[] = ["draft", "review", "published", "hidden"];
 
@@ -56,12 +56,12 @@ export function SetWorkspace() {
     ? albums.filter((album) => !selectedSet.albumIdsWithOrder.some((ref) => ref.albumId === album.id))
     : albums;
 
-  function createSet() {
+  async function createSet() {
     const title = newSetTitle.trim();
     if (!title) return;
 
-    const setId = actions.createSet({ title });
-    setSelectedSetId(setId);
+    const setId = await actions.createSet({ title });
+    if (setId) setSelectedSetId(setId);
     setNewSetTitle("");
   }
 
@@ -80,7 +80,7 @@ export function SetWorkspace() {
       tone: "danger"
     });
 
-    if (confirmed) actions.trashSet(selectedSet.id);
+    if (confirmed) await actions.trashSet(selectedSet.id);
   }
 
   return (
@@ -102,13 +102,13 @@ export function SetWorkspace() {
               aria-label="New set title"
               onChange={(event) => setNewSetTitle(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === "Enter") createSet();
+                if (event.key === "Enter") void createSet();
               }}
               placeholder="Set title"
               value={newSetTitle}
             />
           </label>
-          <button className="admin-button" onClick={createSet} type="button">
+          <button className="admin-button" onClick={() => void createSet()} type="button">
             <Plus aria-hidden />
             Create
           </button>

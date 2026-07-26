@@ -1,5 +1,5 @@
-import { CloudflareIngestWorkspace } from "@/components/admin/CloudflareIngestWorkspace";
+import { redirect } from "next/navigation";
 
 export default function AdminIngestPage() {
-  return <CloudflareIngestWorkspace />;
+  redirect("/admin/albums");
 }
