@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import type { PublicAlbumSummary } from "@/lib/portfolio";
 
 export function PortfolioTagLinks({
@@ -14,7 +12,7 @@ export function PortfolioTagLinks({
       {album.subtitleTags.map(({ label, slug }, index) => (
         <span className="portfolio-tag-segment" key={`${label}-${index}`}>
           {index ? ", " : ""}
-          {slug ? <Link href={`/tags/${slug}`}>{label}</Link> : label}
+          {slug ? <a href={`/tags/${slug}`}>{label}</a> : label}
         </span>
       ))}
       {count !== undefined ? <span className="portfolio-tag-count"> · {count}</span> : null}

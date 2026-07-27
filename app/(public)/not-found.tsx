@@ -1,14 +1,12 @@
-import Link from "next/link";
-
 export default function NotFoundPage() {
   return (
     <div className="text-shell">
       <header className="page-title">
         <h1>Not found</h1>
         <p>This frame is not part of the public archive.</p>
-        <Link className="plain-link" href="/archive">
-          Return to archive
-        </Link>
+        {/* A document navigation lets Cloudflare serve the cached public HTML. */}
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+        <a className="plain-link" href="/albums">Return to albums</a>
       </header>
     </div>
   );

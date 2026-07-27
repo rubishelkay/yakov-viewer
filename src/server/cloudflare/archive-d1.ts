@@ -164,7 +164,7 @@ export async function readD1Archive(db: Database): Promise<AdminArchive> {
     albumSetIds.set(row.album_id, [...(albumSetIds.get(row.album_id) ?? []), row.set_id]);
   }
 
-  return adminArchiveSchema.parse({
+  const archive: AdminArchive = {
     sets: setRows.map((row) => ({
       id: row.id,
       slug: row.slug,
@@ -279,7 +279,11 @@ export async function readD1Archive(db: Database): Promise<AdminArchive> {
         : [{ version: "sourceJpeg" as const, status: "done" as const, progress: 100 }],
       createdAt: row.created_at
     }))
-  });
+  };
+
+  return process.env.NODE_ENV === "production"
+    ? archive
+    : adminArchiveSchema.parse(archive);
 }
 
 export async function createD1Album(

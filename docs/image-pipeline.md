@@ -39,6 +39,10 @@ idempotent.
 Batch files are processed sequentially to keep browser memory predictable. A bad file is
 marked failed without cancelling the remaining files.
 
+Each successful file is committed independently. If the browser, network, or Worker
+interrupts a batch, completed photos remain valid in D1/R2 and only missing frames need
+to be selected again. The admin refreshes its archive snapshot after the batch finishes.
+
 ## Metadata And Color
 
 Public JPEGs never retain EXIF, XMP, IPTC/Photoshop, comments, or unknown APP metadata.

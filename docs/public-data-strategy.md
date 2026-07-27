@@ -8,13 +8,15 @@ There is no static manifest/localStorage split and no separate Pages Functions a
 
 ```txt
 public request
-  -> Next server component
+  -> cached public Worker entrypoint
+  -> Next server component on a miss/refresh
   -> published-only D1 query
   -> public R2 URLs
 ```
 
 Routes are dynamic so an admin publication can appear without rebuilding the project.
-Successful admin mutations revalidate the public layout tree.
+Successful admin mutations revalidate the public layout tree. Edge HTML can remain
+fresh for up to 60 seconds.
 
 ## Visibility Rules
 
@@ -60,6 +62,11 @@ multi-filtering can use effective photo tags with AND logic without changing sto
 
 ## Caching
 
-R2 asset URLs are immutable and cache for one year. D1-backed HTML remains dynamic
-during this stage so publication changes are simple and predictable. Fine-grained
-Next cache tags can be added later if traffic makes that useful.
+R2 asset URLs are immutable and cache for one year. D1-backed HTML is rendered
+dynamically on cache fill, then Cloudflare Workers Caching keeps it fresh for 60
+seconds with `stale-while-revalidate` and `stale-if-error` resilience.
+
+The default Worker entrypoint remains uncached. Only normal public HTML `GET` requests
+are delegated to the cached `PublicFrontend` entrypoint. `/admin`, `/api`, `/_next`,
+mutations, and React Server Component requests never enter the public document cache.
+Fine-grained cache-tag purge after admin mutations can replace the short TTL later.

@@ -1,7 +1,6 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { Shuffle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -10,7 +9,6 @@ import type { PublicAlbumSummary } from "@/lib/portfolio";
 
 export function PortfolioHeader({ albums }: { albums: PublicAlbumSummary[] }) {
   const pathname = usePathname();
-  const router = useRouter();
   const [overHero, setOverHero] = useState(pathname === "/");
   const [hidden, setHidden] = useState(false);
   const lastScrollY = useRef(0);
@@ -67,7 +65,7 @@ export function PortfolioHeader({ albums }: { albums: PublicAlbumSummary[] }) {
     if (!choices.length) return;
     const album = choices[Math.floor(Math.random() * choices.length)];
     const photoIndex = Math.floor(Math.random() * album.photoCount);
-    router.push(`/albums/${album.slug}?photo=${photoIndex + 1}`);
+    window.location.assign(`/albums/${album.slug}?photo=${photoIndex + 1}`);
   }
 
   const headerClassName = [
@@ -78,9 +76,11 @@ export function PortfolioHeader({ albums }: { albums: PublicAlbumSummary[] }) {
 
   return (
     <header className={headerClassName}>
-      <Link className="portfolio-title" href="/">
+      {/* A document navigation lets Cloudflare serve the cached public HTML. */}
+      {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+      <a className="portfolio-title" href="/">
         Yakov Shmol
-      </Link>
+      </a>
       <div className="portfolio-header__actions">
         <button
           aria-label="Random photo"

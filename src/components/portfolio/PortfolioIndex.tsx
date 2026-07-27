@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
@@ -54,7 +53,7 @@ export function PortfolioIndex({
                 className="portfolio-popular-tags"
               >
                 {section.popularTags.map((tag) => (
-                  <Link href={`/tags/${tag.slug}`} key={tag.slug}>{tag.label}</Link>
+                  <a href={`/tags/${tag.slug}`} key={tag.slug}>{tag.label}</a>
                 ))}
               </nav>
             ) : null}
@@ -100,10 +99,10 @@ function PortfolioHero({ albums }: { albums: PublicAlbumSummary[] }) {
           />
         ) : null;
       })}
-      <Link aria-label={`Open ${current.title}`} className="portfolio-hero__link" href={`/albums/${current.slug}`}>
+      <a aria-label={`Open ${current.title}`} className="portfolio-hero__link" href={`/albums/${current.slug}`}>
         <span>{current.title}</span>
         <small>view</small>
-      </Link>
+      </a>
       <button
         aria-label="Scroll to album index"
         className="portfolio-hero__cue portfolio-icon-button"

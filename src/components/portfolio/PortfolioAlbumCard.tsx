@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import { PortfolioImage } from "@/components/portfolio/PortfolioImage";
 import { PortfolioTagLinks } from "@/components/portfolio/PortfolioTagLinks";
 import type { PublicAlbumSummary } from "@/lib/portfolio";
@@ -11,7 +9,7 @@ export function PortfolioAlbumCard({
 }) {
   return (
     <article className="portfolio-album-card">
-      <Link aria-label={`Open ${album.title}`} href={`/albums/${album.slug}`}>
+      <a aria-label={`Open ${album.title}`} href={`/albums/${album.slug}`}>
         <span className="portfolio-album-card__cover">
           {album.coverUrl ? (
             <PortfolioImage
@@ -22,9 +20,9 @@ export function PortfolioAlbumCard({
             />
           ) : null}
         </span>
-      </Link>
+      </a>
       <span className="portfolio-album-card__meta">
-        <Link href={`/albums/${album.slug}`}><strong>{album.title}</strong></Link>
+        <a href={`/albums/${album.slug}`}><strong>{album.title}</strong></a>
         <small><PortfolioTagLinks album={album} count={album.photoCount} /></small>
       </span>
     </article>

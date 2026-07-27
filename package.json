@@ -12,10 +12,11 @@
     "validate:content": "node --import tsx scripts/validate-content.ts",
     "test:admin-auth": "node --conditions=react-server --import tsx --test tests/admin-auth.test.ts",
     "test:image-pipeline": "node --import tsx --test tests/jpeg-metadata.test.ts",
+    "test:public-cache": "node --import tsx --test tests/public-cache.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
     "build": "next build",
-    "check": "pnpm validate:content && pnpm typecheck && pnpm test:admin-auth && pnpm test:image-pipeline && pnpm lint && pnpm build"
+    "check": "pnpm validate:content && pnpm typecheck && pnpm test:admin-auth && pnpm test:image-pipeline && pnpm test:public-cache && pnpm lint && pnpm build"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.20.1",
@@ -27,6 +28,7 @@
     "zod": "latest"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260714.1",
     "@types/node": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",

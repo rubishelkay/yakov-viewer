@@ -60,21 +60,24 @@ album. Download is controlled per album, while viewer zoom always uses expanded.
 ## Production Checkpoint
 
 As of 2026-07-27, migrations `0004` and `0005` are applied and Worker version
-`0133329c-1253-444f-9f92-9231435034c4` is live on `yakov.shmol.cc`. Public routes
+`268bf6db-8df4-4c1d-a1b4-671661d48fca` is live on `yakov.shmol.cc`. Public routes
 read D1, anonymous admin requests are intercepted by Access, and the owner can use the
-unified Albums workspace. Remote D1 has 11 albums, 365 photos, 783 assets, and 2
-published Sets with no foreign-key violations. The homepage renders every published
-Set as its own ordered album section and shows five tags ranked by album usage inside
-that Set.
+unified Albums workspace. Remote D1 has 14 albums, 448 photos, 1032 assets, and 3 Sets
+with no foreign-key violations. The homepage renders every published Set as its own
+ordered album section and shows five tags ranked by album usage inside that Set.
 
-The remaining release action for this checkpoint is committing and pushing the reviewed
-source to `codex/admin-mvp`.
+Public HTML uses a short Cloudflare edge cache to keep cold Next renders inside the
+Workers Free CPU envelope. Admin, API, assets, and React Server Component requests stay
+uncached. A batch interrupted by a Worker failure keeps every photo already committed
+to D1/R2; resume by uploading only the missing files.
 
 ## After Release
 
 The user can now start adding real albums. Product changes are driven by actual upload
 friction. Likely later milestones:
 
+- paginate or split the growing admin archive snapshot;
+- purge public HTML cache tags immediately after publishing;
 - bulk edit and multi-album upload sessions;
 - private Google Drive `master` references;
 - automatic/queued image processing;

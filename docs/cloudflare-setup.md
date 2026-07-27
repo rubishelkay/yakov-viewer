@@ -20,6 +20,7 @@ version preview URLs are disabled. The old Pages project is not the runtime targ
 
 ```txt
 open-next.config.ts
+custom-worker.ts
 wrangler.jsonc
 cloudflare-env.d.ts
 migrations/
@@ -85,6 +86,28 @@ All three are public web JPEG tiers. The expanded file is the sanitized uploaded
 integration. Current uploads do not duplicate expanded into private R2.
 
 `yakov-next-cache` belongs only to OpenNext incremental cache.
+
+## Worker CPU And Public Cache
+
+The Workers Free CPU limit is tight enough that a cold dynamic Next render can
+occasionally fail with Cloudflare `1102`. `custom-worker.ts` therefore acts as an
+uncached gateway:
+
+```txt
+public GET document -> cached PublicFrontend entrypoint -> OpenNext/D1
+admin, API, assets, RSC, mutations -> uncached OpenNext entrypoint
+```
+
+Public HTML is fresh for 60 seconds and may be served stale while Cloudflare refreshes
+it or while a transient Worker error is active. Browser cache headers remain controlled
+by Next; the edge policy is supplied only to Cloudflare Workers Caching. Public links
+use document navigation so normal browsing can benefit from that cache without emitting
+Next prefetch requests. A new Worker version starts with an empty cache and should be
+prewarmed after deployment.
+
+The admin archive endpoint still returns one complete snapshot. Production skips a
+second server-side Zod walk, but pagination or entity-specific reads are required before
+the archive grows substantially beyond the first real albums.
 
 ## D1 Migrations
 
@@ -170,10 +193,10 @@ As of 2026-07-27:
 - production has migrations through `0005`;
 - Access and the owner identity are already configured;
 - the full D1-backed admin and public site are deployed as Worker version
-  `0133329c-1253-444f-9f92-9231435034c4`;
+  `268bf6db-8df4-4c1d-a1b4-671661d48fca`;
 - public home, album index, album viewer, and tag routes return `200`;
 - the homepage renders one ordered section per published Set with five popular tags;
 - anonymous admin and admin API requests are redirected to Cloudflare Access;
 - the owner can open the unified `/admin/albums` workspace in production;
-- remote D1 contains 11 albums, 365 photos, 783 assets, and 2 published Sets;
+- remote D1 contains 14 albums, 448 photos, 1032 assets, and 3 Sets;
 - `PRAGMA foreign_key_check` returns no rows.
