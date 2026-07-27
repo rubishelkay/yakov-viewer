@@ -58,7 +58,7 @@ validation, but runtime pages now read D1 and media stays in R2.
 
 ## Current Release State
 
-Completed locally:
+Completed in production:
 
 1. Accepted Fable UI ported to Next.
 2. OpenNext Worker and Cloudflare bindings.
@@ -66,9 +66,7 @@ Completed locally:
 4. Full admin mutations, multi-album photo membership, Sets, Tags, Settings, and Bin.
 5. Public pages switched to D1.
 6. Three-tier JPEG viewer and album-level Download policy.
-7. Metadata sanitization and local end-to-end QA.
-
-Pending release operations are production migrations, deploy, production smoke QA, and
-Git commit/push.
+7. Metadata sanitization and end-to-end QA.
+8. Homepage sections sourced from published Sets with per-Set popular tags.
 
 Logjamming begins after real Yakov Viewer filling proves the shared archive contract.

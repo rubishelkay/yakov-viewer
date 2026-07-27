@@ -70,8 +70,8 @@ Confirm the deployment still has:
 ## Production Smoke
 
 The 2026-07-27 deployment completed the non-destructive parts of this checklist. The
-existing `Cloud upload smoke test` draft contains 29 photos, so no second temporary
-production upload was created.
+former smoke upload has since become real portfolio content, so future release QA
+should use a clearly named temporary draft and remove it after verification.
 
 1. Anonymous `/` and `/albums` return 200.
 2. Anonymous `/admin` is intercepted by Access.

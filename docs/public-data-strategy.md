@@ -28,7 +28,7 @@ Successful admin mutations revalidate the public layout tree.
 ## Route Semantics
 
 ```txt
-/                 albums from published Sets, ordered by Set then membership
+/                 one section per published Set, ordered by Set then membership
 /albums           every published album, ordered globally
 /albums/:slug     published photos in AlbumPhoto order
 /tags/:slug       published albums with the album/effective photo tag
@@ -36,7 +36,9 @@ Successful admin mutations revalidate the public layout tree.
 ```
 
 An album may be published and intentionally absent from the homepage by leaving it
-outside every published Set.
+outside every published Set. The same album may appear in several homepage sections
+without duplicating its Photo or Asset records. Each section shows up to five popular
+tags, ranked by the number of its albums carrying that album/effective-photo tag.
 
 ## Images And Download
 

@@ -2,32 +2,35 @@
 
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { PortfolioAlbumCard } from "@/components/portfolio/PortfolioAlbumCard";
 import { PortfolioImage } from "@/components/portfolio/PortfolioImage";
-import { isFilmAlbum, type PublicAlbumSummary } from "@/lib/portfolio";
-
-type AlbumFilter = "all" | "film" | "digital";
+import {
+  getPopularAlbumTags,
+  type PublicAlbumSet,
+  type PublicAlbumSummary
+} from "@/lib/portfolio";
 
 export function PortfolioIndex({
-  albums,
+  albums = [],
   hero = false,
-  heroAlbums = []
+  heroAlbums = [],
+  sets
 }: {
-  albums: PublicAlbumSummary[];
+  albums?: PublicAlbumSummary[];
   hero?: boolean;
   heroAlbums?: PublicAlbumSummary[];
+  sets?: PublicAlbumSet[];
 }) {
-  const [filter, setFilter] = useState<AlbumFilter>("all");
-  const shownAlbums = useMemo(
-    () =>
-      albums.filter((album) => {
-        if (filter === "all") return true;
-        return filter === "film" ? isFilmAlbum(album) : !isFilmAlbum(album);
-      }),
-    [albums, filter]
-  );
+  const sections = sets ?? [{
+    albums,
+    id: "index",
+    popularTags: getPopularAlbumTags(albums),
+    slug: "index",
+    subtitle: "",
+    title: "index"
+  }];
 
   return (
     <main className="portfolio-main">
@@ -36,29 +39,33 @@ export function PortfolioIndex({
       ) : (
         <div className="portfolio-header-spacer" />
       )}
-      <section aria-label="Albums" className="portfolio-index" id="index">
-        <div className="portfolio-index__head">
-          <h1>index</h1>
-          <div aria-label="Filter albums" className="portfolio-filters" role="group">
-            {(["all", "film", "digital"] as AlbumFilter[]).map((value) => (
-              <button
-                aria-pressed={filter === value}
-                className={filter === value ? "is-active" : undefined}
-                key={value}
-                onClick={() => setFilter(value)}
-                type="button"
+      {sections.map((section, index) => (
+        <section
+          aria-label={section.title}
+          className="portfolio-index"
+          id={index === 0 ? "index" : `set-${section.slug}`}
+          key={section.id}
+        >
+          <div className="portfolio-index__head">
+            <h1>{section.title}</h1>
+            {section.popularTags.length ? (
+              <nav
+                aria-label={`Popular tags in ${section.title}`}
+                className="portfolio-popular-tags"
               >
-                {value === "film" ? "film photography" : value === "digital" ? "digital photo" : "all"}
-              </button>
+                {section.popularTags.map((tag) => (
+                  <Link href={`/tags/${tag.slug}`} key={tag.slug}>{tag.label}</Link>
+                ))}
+              </nav>
+            ) : null}
+          </div>
+          <div className="portfolio-album-grid">
+            {section.albums.map((album) => (
+              <PortfolioAlbumCard album={album} key={album.id} />
             ))}
           </div>
-        </div>
-        <div className="portfolio-album-grid">
-          {shownAlbums.map((album) => (
-            <PortfolioAlbumCard album={album} key={album.id} />
-          ))}
-        </div>
-      </section>
+        </section>
+      ))}
     </main>
   );
 }

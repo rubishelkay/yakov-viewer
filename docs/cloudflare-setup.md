@@ -169,11 +169,11 @@ As of 2026-07-27:
 
 - production has migrations through `0005`;
 - Access and the owner identity are already configured;
-- the protected upload smoke album remains a draft with 29 photos;
 - the full D1-backed admin and public site are deployed as Worker version
-  `d51da1bc-3a4a-4ff9-9b7f-b74ff938bf3b`;
+  `0133329c-1253-444f-9f92-9231435034c4`;
 - public home, album index, album viewer, and tag routes return `200`;
+- the homepage renders one ordered section per published Set with five popular tags;
 - anonymous admin and admin API requests are redirected to Cloudflare Access;
 - the owner can open the unified `/admin/albums` workspace in production;
-- remote D1 contains 10 albums, 341 photos, and 711 assets;
+- remote D1 contains 11 albums, 365 photos, 783 assets, and 2 published Sets;
 - `PRAGMA foreign_key_check` returns no rows.

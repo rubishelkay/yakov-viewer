@@ -937,8 +937,16 @@ img {
 }
 
 .portfolio-index {
-  padding: 56px var(--portfolio-gutter) 110px;
+  padding: 56px var(--portfolio-gutter) 64px;
   scroll-margin-top: var(--portfolio-header-height);
+}
+
+.portfolio-index + .portfolio-index {
+  padding-top: 12px;
+}
+
+.portfolio-index:last-child {
+  padding-bottom: 110px;
 }
 
 .portfolio-index__head {
@@ -958,27 +966,21 @@ img {
   text-transform: uppercase;
 }
 
-.portfolio-filters {
+.portfolio-popular-tags {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 14px;
 }
 
-.portfolio-filters button {
+.portfolio-popular-tags a {
   padding: 2px 0;
-  background: transparent;
   color: var(--text-soft);
   font-size: 11px;
   letter-spacing: 0.05em;
-  cursor: pointer;
 }
 
-.portfolio-filters button:hover {
-  color: var(--text-muted);
-}
-
-.portfolio-filters button.is-active {
+.portfolio-popular-tags a:hover {
   color: var(--text);
 }
 
@@ -1394,7 +1396,7 @@ img {
 @media (max-width: 640px) {
   .portfolio-index { padding-top: 40px; }
   .portfolio-index__head { align-items: flex-start; flex-direction: column; }
-  .portfolio-filters { justify-content: flex-start; }
+  .portfolio-popular-tags { justify-content: flex-start; }
   .portfolio-album-grid { grid-template-columns: 1fr; }
   .portfolio-album-page { padding-top: calc(var(--portfolio-header-height) + 30px); }
   .portfolio-grid-s { grid-template-columns: repeat(3, minmax(0, 1fr)); }

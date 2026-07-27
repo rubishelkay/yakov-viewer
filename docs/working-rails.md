@@ -60,10 +60,12 @@ album. Download is controlled per album, while viewer zoom always uses expanded.
 ## Production Checkpoint
 
 As of 2026-07-27, migrations `0004` and `0005` are applied and Worker version
-`d51da1bc-3a4a-4ff9-9b7f-b74ff938bf3b` is live on `yakov.shmol.cc`. Public routes
+`0133329c-1253-444f-9f92-9231435034c4` is live on `yakov.shmol.cc`. Public routes
 read D1, anonymous admin requests are intercepted by Access, and the owner can use the
-unified Albums workspace. Remote D1 has 10 albums, 341 photos, and 711 assets with no
-foreign-key violations.
+unified Albums workspace. Remote D1 has 11 albums, 365 photos, 783 assets, and 2
+published Sets with no foreign-key violations. The homepage renders every published
+Set as its own ordered album section and shows five tags ranked by album usage inside
+that Set.
 
 The remaining release action for this checkpoint is committing and pushing the reviewed
 source to `codex/admin-mvp`.

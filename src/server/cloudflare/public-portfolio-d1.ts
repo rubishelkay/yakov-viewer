@@ -6,11 +6,13 @@ import { cache } from "react";
 import { adminSettingsSchema, type PublicDownloadPolicy } from "@/admin/archive-schema";
 import { defaultAdminSettings } from "@/admin/default-settings";
 import type {
+  PublicAlbumSet,
   PublicAlbumDetail,
   PublicAlbumSummary,
   PublicPhoto,
   PublicTag
 } from "@/lib/portfolio";
+import { getPopularAlbumTags } from "@/lib/portfolio";
 
 type Database = CloudflareEnv["DB"];
 type AlbumRow = {
@@ -37,6 +39,13 @@ type PhotoRow = {
   download_url: string | null;
 };
 type TagRow = { album_id: string; label: string; slug: string };
+type HomepageSetRow = {
+  album_id: string;
+  id: string;
+  slug: string;
+  subtitle: string;
+  title: string;
+};
 
 export const readPublicAlbums = cache(async (): Promise<PublicAlbumSummary[]> => {
   const { env } = await getCloudflareContext({ async: true });
@@ -124,26 +133,39 @@ export const readPublicAlbums = cache(async (): Promise<PublicAlbumSummary[]> =>
   ));
 });
 
-export const readPublicHomepageAlbums = cache(async (): Promise<PublicAlbumSummary[]> => {
+export const readPublicHomepageSets = cache(async (): Promise<PublicAlbumSet[]> => {
   const { env } = await getCloudflareContext({ async: true });
   const albums: PublicAlbumSummary[] = await readPublicAlbums();
   const membershipResult = await env.DB.prepare(`
-    SELECT sa.album_id
+    SELECT s.id, s.slug, s.title, s.subtitle, sa.album_id
     FROM archive_sets s
     JOIN set_albums sa ON sa.set_id = s.id
     JOIN archive_albums a ON a.id = sa.album_id
     WHERE s.status = 'published' AND a.status = 'published'
     ORDER BY s.sort_order, sa.position, a.sort_order, a.created_at
-  `).all<{ album_id: string }>();
+  `).all<HomepageSetRow>();
   const albumById = new Map(albums.map((album) => [album.id, album]));
-  const seen = new Set<string>();
+  const sets = new Map<string, PublicAlbumSet>();
 
-  return rows<{ album_id: string }>(membershipResult).flatMap(({ album_id }) => {
-    if (seen.has(album_id)) return [];
-    seen.add(album_id);
-    const album = albumById.get(album_id);
-    return album ? [album] : [];
-  });
+  for (const row of rows<HomepageSetRow>(membershipResult)) {
+    const album = albumById.get(row.album_id);
+    if (!album) continue;
+    const set = sets.get(row.id) ?? {
+      albums: [],
+      id: row.id,
+      popularTags: [],
+      slug: row.slug,
+      subtitle: row.subtitle,
+      title: row.title
+    };
+    set.albums.push(album);
+    sets.set(row.id, set);
+  }
+
+  return [...sets.values()].map((set) => ({
+    ...set,
+    popularTags: getPopularAlbumTags(set.albums)
+  }));
 });
 
 export const readPublicAlbumBySlug = cache(async (slug: string): Promise<PublicAlbumDetail | undefined> => {

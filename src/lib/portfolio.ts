@@ -18,6 +18,15 @@ export type PublicAlbumSummary = {
   title: string;
 };
 
+export type PublicAlbumSet = {
+  albums: PublicAlbumSummary[];
+  id: string;
+  popularTags: PublicTag[];
+  slug: string;
+  subtitle: string;
+  title: string;
+};
+
 export type PublicPhoto = {
   displayUrl: string;
   downloadUrl?: string;
@@ -119,8 +128,26 @@ export function getPublicAlbumsForTag(slug: string): PublicAlbumSummary[] {
   return albumSummaries.filter((album) => album.tagSlugs.includes(slug));
 }
 
-export function isFilmAlbum(album: PublicAlbumSummary) {
-  return album.kind === "film";
+export function getPopularAlbumTags(albums: PublicAlbumSummary[], limit = 5) {
+  const usage = new Map<string, PublicTag & { count: number }>();
+
+  for (const album of albums) {
+    const seenInAlbum = new Set<string>();
+    for (const tag of album.filterTags) {
+      if (seenInAlbum.has(tag.slug)) continue;
+      seenInAlbum.add(tag.slug);
+      const current = usage.get(tag.slug);
+      usage.set(tag.slug, {
+        ...tag,
+        count: (current?.count ?? 0) + 1
+      });
+    }
+  }
+
+  return [...usage.values()]
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+    .slice(0, limit)
+    .map(({ label, slug }) => ({ label, slug }));
 }
 
 function getAlbumTagLabels(album: (typeof portfolioManifest.albums)[number]) {
