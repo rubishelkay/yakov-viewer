@@ -1,12 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   ArrowDown,
-  ArrowLeft,
-  ArrowRight,
   ArrowUp,
   CircleX,
+  Grip,
   Maximize2,
   Plus,
   Sparkles,
@@ -32,11 +31,14 @@ const editableStatuses: ArchiveStatus[] = ["draft", "review", "published", "hidd
 export function SetWorkspace() {
   const { actions, archive, previewUrls } = useAdminArchive();
   const { confirm, dialog } = useAdminConfirmDialog();
+  const draggingAlbumIdRef = useRef("");
   const sets = getOrderedSetsFromArchive(archive);
   const albums = getOrderedAlbumsFromArchive(archive);
   const [selectedSetIdState, setSelectedSetId] = useState(sets[0]?.id ?? "");
   const [newSetTitle, setNewSetTitle] = useState("");
   const [albumToAdd, setAlbumToAdd] = useState("");
+  const [draggingAlbumId, setDraggingAlbumId] = useState("");
+  const [dropTargetAlbumId, setDropTargetAlbumId] = useState("");
   const selectedSetId = sets.some((set) => set.id === selectedSetIdState)
     ? selectedSetIdState
     : (sets[0]?.id ?? "");
@@ -69,6 +71,12 @@ export function SetWorkspace() {
     if (!selectedSet || !albumToAdd) return;
     actions.addAlbumToSet(selectedSet.id, albumToAdd);
     setAlbumToAdd("");
+  }
+
+  function moveAlbumToDropTarget(albumId: string, targetAlbumId: string) {
+    if (!selectedSet || albumId === targetAlbumId) return;
+    const targetIndex = selectedAlbums.findIndex((album) => album.id === targetAlbumId);
+    if (targetIndex >= 0) actions.moveAlbumInSet(selectedSet.id, albumId, targetIndex);
   }
 
   async function trashSet() {
@@ -198,7 +206,37 @@ export function SetWorkspace() {
 
             <div className="admin-album-grid admin-album-grid--editable">
               {selectedAlbums.map((album, index) => (
-                <article className="admin-album-tile admin-album-tile--square" key={album.id}>
+                <article
+                  className="admin-album-tile admin-album-tile--square"
+                  data-drag-target={
+                    dropTargetAlbumId === album.id && draggingAlbumId !== album.id
+                      ? "true"
+                      : undefined
+                  }
+                  data-dragging={draggingAlbumId === album.id ? "true" : undefined}
+                  key={album.id}
+                  onDragEnd={() => {
+                    draggingAlbumIdRef.current = "";
+                    setDraggingAlbumId("");
+                    setDropTargetAlbumId("");
+                  }}
+                  onDragEnter={(event) => {
+                    event.preventDefault();
+                    if (draggingAlbumId && draggingAlbumId !== album.id) {
+                      setDropTargetAlbumId(album.id);
+                    }
+                  }}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const movedAlbumId =
+                      draggingAlbumIdRef.current || event.dataTransfer.getData("text/plain");
+                    if (movedAlbumId) moveAlbumToDropTarget(movedAlbumId, album.id);
+                    draggingAlbumIdRef.current = "";
+                    setDraggingAlbumId("");
+                    setDropTargetAlbumId("");
+                  }}
+                >
                   <CoverImage url={getAlbumCoverPreviewUrlFromArchive(archive, previewUrls, album)} />
                   <div>
                     <span className="admin-tile-title-row">
@@ -206,9 +244,33 @@ export function SetWorkspace() {
                       {album.isDemo ? <AdminDemoBadge /> : null}
                     </span>
                     <small>{album.subtitle || "No subtitle"}</small>
-                    <div className="admin-order-buttons admin-order-buttons--inline">
-                      <button disabled={index === 0} onClick={() => actions.reorderAlbumInSet(selectedSet.id, album.id, "left")} type="button" aria-label="Move album left"><ArrowLeft aria-hidden /></button>
-                      <button disabled={index === selectedAlbums.length - 1} onClick={() => actions.reorderAlbumInSet(selectedSet.id, album.id, "right")} type="button" aria-label="Move album right"><ArrowRight aria-hidden /></button>
+                    <div className="admin-set-album-actions">
+                      <button
+                        aria-label={`Drag ${album.title} to reorder`}
+                        className="admin-tile-drag-handle"
+                        draggable
+                        onDragStart={(event) => {
+                          event.dataTransfer.effectAllowed = "move";
+                          event.dataTransfer.setData("text/plain", album.id);
+                          draggingAlbumIdRef.current = album.id;
+                          setDraggingAlbumId(album.id);
+                          setDropTargetAlbumId("");
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "ArrowLeft" && index > 0) {
+                            event.preventDefault();
+                            actions.reorderAlbumInSet(selectedSet.id, album.id, "left");
+                          }
+                          if (event.key === "ArrowRight" && index < selectedAlbums.length - 1) {
+                            event.preventDefault();
+                            actions.reorderAlbumInSet(selectedSet.id, album.id, "right");
+                          }
+                        }}
+                        title="Drag to reorder. Arrow keys also work."
+                        type="button"
+                      >
+                        <Grip aria-hidden />
+                      </button>
                       <button onClick={() => actions.removeAlbumFromSet(selectedSet.id, album.id)} type="button" aria-label="Remove album from set"><X aria-hidden /></button>
                     </div>
                   </div>

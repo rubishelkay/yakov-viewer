@@ -74,6 +74,10 @@ export async function applyD1ArchiveMutation(
       return removeAlbumFromSet(env.DB, mutation.setId, mutation.albumId);
     case "reorderAlbumInSet":
       return reorderAlbumInSet(env.DB, mutation.setId, mutation.albumId, mutation.direction);
+    case "moveAlbumInSet":
+      return moveAlbumInSet(env.DB, mutation.setId, mutation.albumId, mutation.position);
+    case "setAlbumSets":
+      return setAlbumSets(env.DB, mutation.albumId, mutation.setIds);
     case "createTag":
       return createTag(env.DB, mutation.label, mutation.scope ?? "both");
     case "updateTag":
@@ -472,6 +476,73 @@ async function reorderAlbumInSet(
     db.prepare("UPDATE set_albums SET position = ? WHERE set_id = ? AND album_id = ?")
       .bind(ordered[index].position, setId, ordered[swapIndex].album_id)
   ]);
+  return { id: albumId };
+}
+
+async function moveAlbumInSet(
+  db: Database,
+  setId: string,
+  albumId: string,
+  position: number
+) {
+  const result = await db.prepare(`
+    SELECT album_id FROM set_albums WHERE set_id = ? ORDER BY position
+  `).bind(setId).all<{ album_id: string }>();
+  const ordered = resultRows<{ album_id: string }>(result);
+  const currentIndex = ordered.findIndex((row) => row.album_id === albumId);
+  if (currentIndex < 0) {
+    throw new ArchiveMutationError("membership_not_found", "Album is not in this set.", 404);
+  }
+
+  const [moved] = ordered.splice(currentIndex, 1);
+  ordered.splice(clamp(position, 0, ordered.length), 0, moved);
+  await db.batch(ordered.map((row, index) =>
+    db.prepare("UPDATE set_albums SET position = ?, featured = ? WHERE set_id = ? AND album_id = ?")
+      .bind(index, index === 0 ? 1 : 0, setId, row.album_id)
+  ));
+  return { id: albumId };
+}
+
+async function setAlbumSets(db: Database, albumId: string, setIds: string[]) {
+  const album = await db.prepare(`
+    SELECT id FROM archive_albums WHERE id = ? AND status NOT IN ('trash', 'deleted')
+  `).bind(albumId).first();
+  if (!album) throw notFound("album");
+
+  const desiredSetIds = [...new Set(setIds)];
+  if (desiredSetIds.length) {
+    const placeholders = desiredSetIds.map(() => "?").join(",");
+    const available = await db.prepare(`
+      SELECT id FROM archive_sets
+      WHERE id IN (${placeholders}) AND status NOT IN ('trash', 'deleted')
+    `).bind(...desiredSetIds).all<{ id: string }>();
+    if (resultRows<{ id: string }>(available).length !== desiredSetIds.length) {
+      throw notFound("set");
+    }
+  }
+
+  const currentResult = await db.prepare(`
+    SELECT set_id FROM set_albums WHERE album_id = ?
+  `).bind(albumId).all<{ set_id: string }>();
+  const currentSetIds = resultRows<{ set_id: string }>(currentResult).map((row) => row.set_id);
+  const desired = new Set(desiredSetIds);
+  const current = new Set(currentSetIds);
+  const removed = currentSetIds.filter((setId) => !desired.has(setId));
+  const added = desiredSetIds.filter((setId) => !current.has(setId));
+  const statements = [
+    ...removed.map((setId) =>
+      db.prepare("DELETE FROM set_albums WHERE set_id = ? AND album_id = ?").bind(setId, albumId)
+    ),
+    ...added.map((setId) =>
+      db.prepare(`
+        INSERT INTO set_albums (set_id, album_id, position, featured)
+        SELECT ?, ?, COALESCE(MAX(position), -1) + 1, CASE WHEN COUNT(*) = 0 THEN 1 ELSE 0 END
+        FROM set_albums WHERE set_id = ?
+      `).bind(setId, albumId, setId)
+    )
+  ];
+  if (statements.length) await db.batch(statements);
+  for (const setId of removed) await normalizeSetPositions(db, setId);
   return { id: albumId };
 }
 

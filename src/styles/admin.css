@@ -1276,27 +1276,29 @@
   display: grid;
   place-items: center;
   border: 1px solid var(--admin-border-strong);
-  border-radius: 999px;
+  border-radius: 5px;
   background: rgba(255, 255, 255, 0.025);
 }
 
 .admin-set-picker label > span::after {
   content: "";
   width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: transparent;
-  transition: background 140ms ease, transform 140ms ease;
-  transform: scale(0.55);
+  height: 4px;
+  border-bottom: 2px solid var(--admin-surface);
+  border-left: 2px solid var(--admin-surface);
+  opacity: 0;
+  transition: opacity 140ms ease, transform 140ms ease;
+  transform: translateY(-1px) rotate(-45deg) scale(0.7);
 }
 
 .admin-set-picker label[data-checked="true"] > span {
   border-color: rgba(244, 240, 221, 0.72);
+  background: var(--admin-accent);
 }
 
 .admin-set-picker label[data-checked="true"] > span::after {
-  background: var(--admin-accent);
-  transform: scale(1);
+  opacity: 1;
+  transform: translateY(-1px) rotate(-45deg) scale(1);
 }
 
 .admin-set-picker strong {
@@ -1313,6 +1315,22 @@
   text-transform: uppercase;
 }
 
+.admin-set-picker__actions {
+  position: sticky;
+  bottom: -6px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin: 3px -1px -1px;
+  border-top: 1px solid var(--admin-border);
+  background: rgba(15, 15, 14, 0.98);
+  padding: 7px 1px 1px;
+}
+
+.admin-set-picker__actions button {
+  min-height: 32px;
+}
+
 .admin-cover-priority__grid {
   display: grid;
   grid-template-columns: 1.25fr 0.86fr 0.72fr;
@@ -1320,23 +1338,16 @@
   gap: 8px;
 }
 
-.admin-cover-priority__grid button {
+.admin-cover-slot {
   min-width: 0;
   display: grid;
   gap: 7px;
+  margin: 0;
   border: 1px solid var(--admin-border);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.024);
   color: var(--admin-muted);
-  cursor: pointer;
   padding: 7px;
-  text-align: left;
-}
-
-.admin-cover-priority__grid button[data-active="true"] {
-  border-color: rgba(244, 240, 221, 0.58);
-  color: var(--admin-text);
-  box-shadow: 0 0 0 1px rgba(244, 240, 221, 0.12);
 }
 
 .admin-cover-priority__grid img,
@@ -1363,12 +1374,16 @@
   aspect-ratio: 2 / 3;
 }
 
-.admin-cover-priority__grid button > span {
+.admin-cover-slot figcaption {
   overflow: hidden;
   font-size: 0.66rem;
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.admin-cover-priority > .admin-field {
+  margin-top: 10px;
 }
 
 .admin-token-editor,
@@ -1623,6 +1638,55 @@
 .admin-column-browser--sets .admin-album-tile--square img,
 .admin-column-browser--sets .admin-album-tile--square .admin-image-placeholder {
   aspect-ratio: 3 / 2;
+}
+
+.admin-album-tile[data-dragging="true"] {
+  opacity: 0.5;
+}
+
+.admin-album-tile[data-drag-target="true"] {
+  border-color: rgba(153, 194, 255, 0.82);
+  box-shadow: 0 0 0 1px rgba(153, 194, 255, 0.22);
+}
+
+.admin-set-album-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 10px;
+  padding: 0 !important;
+}
+
+.admin-set-album-actions button {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--admin-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--admin-muted);
+  cursor: pointer;
+  padding: 0;
+}
+
+.admin-set-album-actions button:hover,
+.admin-set-album-actions button:focus-visible {
+  border-color: var(--admin-border-strong);
+  color: var(--admin-text);
+}
+
+.admin-set-album-actions svg {
+  width: 14px;
+  height: 14px;
+}
+
+.admin-set-album-actions .admin-tile-drag-handle {
+  cursor: grab;
+}
+
+.admin-set-album-actions .admin-tile-drag-handle:active {
+  cursor: grabbing;
 }
 
 .admin-drag-icon,

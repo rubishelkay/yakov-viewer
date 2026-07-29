@@ -990,6 +990,36 @@ img {
   gap: 26px 20px;
 }
 
+.portfolio-load-more {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding-top: 22px;
+  color: var(--text-soft);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+.portfolio-load-more button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: uppercase;
+}
+
+.portfolio-load-more button:hover {
+  color: var(--text);
+}
+
+.portfolio-load-more span {
+  opacity: 0.55;
+}
+
 .portfolio-album-card {
   min-width: 0;
 }

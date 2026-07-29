@@ -56,20 +56,26 @@ create draft album
 One Photo can belong to several Albums through `AlbumPhoto`; assets are never copied.
 Homepage membership comes from published Sets. `/albums` contains every published
 album. Download is controlled per album, while viewer zoom always uses expanded.
+Set membership is edited as one checkbox selection, albums inside a Set support
+drag-and-drop ordering, and all three cover slots are independent.
 
 ## Production Checkpoint
 
-As of 2026-07-27, migrations `0004` and `0005` are applied and Worker version
-`268bf6db-8df4-4c1d-a1b4-671661d48fca` is live on `yakov.shmol.cc`. Public routes
-read D1, anonymous admin requests are intercepted by Access, and the owner can use the
-unified Albums workspace. Remote D1 has 14 albums, 448 photos, 1032 assets, and 3 Sets
-with no foreign-key violations. The homepage renders every published Set as its own
-ordered album section and shows five tags ranked by album usage inside that Set.
+Migrations `0004` and `0005` are applied on production. Public routes read D1,
+anonymous admin requests are intercepted by Access, and the owner uses the unified
+Albums workspace. Live content counts are intentionally not recorded here because the
+archive is now being filled continuously. The homepage renders every published Set as
+its own ordered album section and shows five tags ranked by album usage inside that Set.
 
-Public HTML uses a short Cloudflare edge cache to keep cold Next renders inside the
-Workers Free CPU envelope. Admin, API, assets, and React Server Component requests stay
-uncached. A batch interrupted by a Worker failure keeps every photo already committed
-to D1/R2; resume by uploading only the missing files.
+Public HTML uses a short Cloudflare edge cache. Admin, API, assets, and React Server
+Component requests stay uncached. A batch interrupted by a Worker failure keeps every
+photo already committed to D1/R2; resume by uploading only the missing files. Public
+album grids reveal cards in ordered batches of 15 while image elements keep native lazy
+loading.
+
+Before the 2026-07-30 usability update, source commit `efdf3ee` was preserved as Git
+tag `yakov-viewer-checkpoint-2026-07-30`. A matching D1 metadata export is kept outside
+the repository at `~/Downloads/yakov_archive_checkpoint_2026-07-30.sql`.
 
 ## After Release
 

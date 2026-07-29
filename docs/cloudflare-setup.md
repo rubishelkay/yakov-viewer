@@ -89,8 +89,9 @@ integration. Current uploads do not duplicate expanded into private R2.
 
 ## Worker CPU And Public Cache
 
-The Workers Free CPU limit is tight enough that a cold dynamic Next render can
-occasionally fail with Cloudflare `1102`. `custom-worker.ts` therefore acts as an
+The account now uses Workers Paid. Its default CPU limit is sufficient for the current
+request path, so `cpu_ms` is intentionally not raised without profiling. The earlier
+Cloudflare `1102` incident is still addressed by `custom-worker.ts`, which acts as an
 uncached gateway:
 
 ```txt
@@ -108,6 +109,14 @@ prewarmed after deployment.
 The admin archive endpoint still returns one complete snapshot. Production skips a
 second server-side Zod walk, but pagination or entity-specific reads are required before
 the archive grows substantially beyond the first real albums.
+
+Workers Paid currently allows a configurable CPU limit up to five minutes while Worker
+memory remains 128 MB. D1 Paid allows up to 10 GB per database and enables 30-day Time
+Travel. These are platform limits, not targets for application code:
+
+- [Workers limits](https://developers.cloudflare.com/workers/platform/limits/)
+- [D1 limits](https://developers.cloudflare.com/d1/platform/limits/)
+- [D1 Time Travel](https://developers.cloudflare.com/d1/reference/time-travel/)
 
 ## D1 Migrations
 
@@ -149,12 +158,11 @@ pnpm run deploy
 `pnpm run deploy` builds and deploys the production Worker and is therefore an externally
 visible action.
 
-## Free-Plan Envelope
+## Storage Envelope
 
-The initial project aims to remain close to the Cloudflare free allowances. The user
-expects roughly 20-50 albums first and accepts normal R2 billing if storage exceeds the
-included 10 GB-month. The admin should report storage, but must not silently lower
-quality or delete files to fit a quota.
+The project now runs on Workers Paid. The user expects roughly 20-50 albums first and
+accepts normal R2/D1 billing as the archive grows. The admin should report storage, but
+must not silently lower quality or delete files to fit a quota.
 
 The approximate per-photo storage is:
 
@@ -188,15 +196,18 @@ hostnames, non-secret Access AUD/team domain, and example variable files.
 
 ## Current Checkpoint
 
-As of 2026-07-27:
+As of 2026-07-30:
 
 - production has migrations through `0005`;
 - Access and the owner identity are already configured;
-- the full D1-backed admin and public site are deployed as Worker version
-  `268bf6db-8df4-4c1d-a1b4-671661d48fca`;
+- the full D1-backed admin and public site are deployed on `yakov.shmol.cc`;
 - public home, album index, album viewer, and tag routes return `200`;
 - the homepage renders one ordered section per published Set with five popular tags;
 - anonymous admin and admin API requests are redirected to Cloudflare Access;
 - the owner can open the unified `/admin/albums` workspace in production;
-- remote D1 contains 14 albums, 448 photos, 1032 assets, and 3 Sets;
-- `PRAGMA foreign_key_check` returns no rows.
+- live counts are omitted because the owner is actively adding albums;
+- source commit `efdf3ee` is tagged `yakov-viewer-checkpoint-2026-07-30`;
+- a D1 metadata export exists outside Git at
+  `~/Downloads/yakov_archive_checkpoint_2026-07-30.sql`;
+- the export SHA-256 is
+  `8b741c659de9d26e745a53d92389fa475b5cc3ce8bf400437244594a7d6bb36b`.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -38,6 +38,7 @@ import type { LocalArchiveAlbum, LocalArchivePhoto, LocalArchivePhotoInAlbum, Lo
 const editableStatuses: ArchiveStatus[] = ["draft", "review", "published", "hidden"];
 export function AlbumWorkspace() {
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const setPickerRef = useRef<HTMLDivElement | null>(null);
   const draggingAlbumIdRef = useRef("");
   const draggingPhotoIdRef = useRef("");
   const { actions, archive, previewUrls } = useAdminArchive();
@@ -54,6 +55,8 @@ export function AlbumWorkspace() {
   const [draggingPhotoId, setDraggingPhotoId] = useState("");
   const [dropTargetPhotoId, setDropTargetPhotoId] = useState("");
   const [isSetPickerOpen, setIsSetPickerOpen] = useState(false);
+  const [pendingSetIds, setPendingSetIds] = useState<string[]>([]);
+  const [isApplyingSets, setIsApplyingSets] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const selectedAlbumId = albums.some((album) => album.id === selectedAlbumIdState)
     ? selectedAlbumIdState
@@ -83,10 +86,30 @@ export function AlbumWorkspace() {
   );
   const selectedAlbumSets = sets.filter((set) => selectedAlbumSetIds.has(set.id));
 
+  useEffect(() => {
+    if (!isSetPickerOpen) return;
+
+    function closeOnOutsideClick(event: PointerEvent) {
+      if (!setPickerRef.current?.contains(event.target as Node)) setIsSetPickerOpen(false);
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsSetPickerOpen(false);
+    }
+
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isSetPickerOpen]);
+
   function selectAlbum(albumId: string) {
     setSelectedAlbumId(albumId);
     setSelectedPhotoId("");
     setIsSetPickerOpen(false);
+    setPendingSetIds([]);
   }
 
   async function createAlbum() {
@@ -174,6 +197,26 @@ export function AlbumWorkspace() {
     const targetIndex = albums.findIndex((album) => album.id === targetAlbumId);
     if (targetIndex < 0 || albumId === targetAlbumId) return;
     actions.moveAlbumToPosition(albumId, targetIndex);
+  }
+
+  function toggleSetPicker() {
+    if (isSetPickerOpen) {
+      setIsSetPickerOpen(false);
+      return;
+    }
+    setPendingSetIds([...selectedAlbumSetIds]);
+    setIsSetPickerOpen(true);
+  }
+
+  async function applySetSelection() {
+    if (!selectedAlbum) return;
+    setIsApplyingSets(true);
+    try {
+      await actions.setAlbumSets(selectedAlbum.id, pendingSetIds);
+      setIsSetPickerOpen(false);
+    } finally {
+      setIsApplyingSets(false);
+    }
   }
 
   return (
@@ -336,10 +379,10 @@ export function AlbumWorkspace() {
 
             <CoverPriorityPicker album={selectedAlbum} />
 
-            <div className="admin-subsection admin-subsection--relative">
+            <div className="admin-subsection admin-subsection--relative" ref={setPickerRef}>
               <div className="admin-subsection-title-row">
                 <h4>Sets</h4>
-                <button className="admin-ghost-button" onClick={() => setIsSetPickerOpen((isOpen) => !isOpen)} type="button">
+                <button className="admin-ghost-button" onClick={toggleSetPicker} type="button">
                   Add to set
                 </button>
               </div>
@@ -359,17 +402,18 @@ export function AlbumWorkspace() {
               </div>
 
               {isSetPickerOpen ? (
-                <div className="admin-set-picker" role="menu">
+                <div aria-label="Choose sets for album" className="admin-set-picker" role="dialog">
                   {sets.map((set) => {
-                    const checked = selectedAlbumSetIds.has(set.id);
+                    const checked = pendingSetIds.includes(set.id);
 
                     return (
                       <label data-checked={checked ? "true" : undefined} key={set.id}>
                         <input
                           checked={checked}
                           onChange={(event) => {
-                            if (event.target.checked) actions.addAlbumToSet(set.id, selectedAlbum.id);
-                            else actions.removeAlbumFromSet(set.id, selectedAlbum.id);
+                            setPendingSetIds((current) => event.target.checked
+                              ? [...current, set.id]
+                              : current.filter((setId) => setId !== set.id));
                           }}
                           type="checkbox"
                         />
@@ -379,6 +423,24 @@ export function AlbumWorkspace() {
                       </label>
                     );
                   })}
+                  <div className="admin-set-picker__actions">
+                    <button
+                      className="admin-ghost-button"
+                      disabled={isApplyingSets}
+                      onClick={() => setIsSetPickerOpen(false)}
+                      type="button"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="admin-button"
+                      disabled={isApplyingSets}
+                      onClick={() => void applySetSelection()}
+                      type="button"
+                    >
+                      {isApplyingSets ? "Saving" : "Apply"}
+                    </button>
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -570,8 +632,8 @@ function PhotoInspector({
     );
   }
 
-  const displayAssetId = photo.assetIds.find((assetId) => assetId.endsWith("-display")) ?? photo.assetIds[0];
-  const thumbAssetId = photo.assetIds.find((assetId) => assetId.endsWith("-thumb")) ?? displayAssetId;
+  const displayAssetId = photoAssetId(archive, photo, "display") ?? photo.assetIds[0];
+  const thumbAssetId = photoAssetId(archive, photo, "thumb") ?? displayAssetId;
   const imageUrl = getPhotoDisplayUrlFromArchive(archive, previewUrls, photo);
   const isHidden = photo.status === "hidden";
   const appearanceCount = getAlbumPhotosForPhotoFromArchive(archive, photo.id).length;
@@ -673,17 +735,17 @@ function PhotoInspector({
       <div className="admin-subsection">
         <h4>Cover shortcuts</h4>
         <div className="admin-row-actions">
-          <button className="admin-ghost-button" data-active={album.coverLandscapeAssetId === displayAssetId ? "true" : undefined} onClick={() => actions.setAlbumCover(album.id, "landscape", displayAssetId)} type="button">
+          <button className="admin-ghost-button" data-active={album.coverLandscapeAssetId === displayAssetId ? "true" : undefined} onClick={() => void actions.setAlbumCover(album.id, "landscape", displayAssetId)} type="button">
             <Square aria-hidden />
-            Landscape
+            Set landscape
           </button>
-          <button className="admin-ghost-button" data-active={album.coverPortraitAssetId === displayAssetId ? "true" : undefined} onClick={() => actions.setAlbumCover(album.id, "portrait", displayAssetId)} type="button">
+          <button className="admin-ghost-button" data-active={album.coverPortraitAssetId === displayAssetId ? "true" : undefined} onClick={() => void actions.setAlbumCover(album.id, "portrait", displayAssetId)} type="button">
             <Square aria-hidden />
-            Portrait
+            Set portrait
           </button>
-          <button className="admin-ghost-button" data-active={album.coverSquareAssetId === thumbAssetId ? "true" : undefined} onClick={() => actions.setAlbumCover(album.id, "square", thumbAssetId)} type="button">
+          <button className="admin-ghost-button" data-active={album.coverSquareAssetId === thumbAssetId ? "true" : undefined} onClick={() => void actions.setAlbumCover(album.id, "square", thumbAssetId)} type="button">
             <Square aria-hidden />
-            Square
+            Set square
           </button>
         </div>
       </div>
@@ -847,23 +909,32 @@ function CoverPriorityPicker({ album }: { album: LocalArchiveAlbum }) {
     <div className="admin-subsection admin-cover-priority">
       <div className="admin-subsection-title-row">
         <h4>Covers</h4>
-        <span>Priority: {coverPriority}</span>
+        <span>Assigned independently</span>
       </div>
       <div className="admin-cover-priority__grid">
         {options.map((option) => (
-          <button
-            data-active={coverPriority === option.type ? "true" : undefined}
+          <figure
+            className="admin-cover-slot"
             data-cover-type={option.type}
             key={option.type}
-            onClick={() => actions.updateAlbum(album.id, { coverPriority: option.type })}
-            title={`Use ${option.label.toLowerCase()} cover first when the layout allows it`}
-            type="button"
           >
             <CoverImage url={getAlbumCoverPreviewUrlFromArchive(archive, previewUrls, album, option.type)} />
-            <span>{option.label}</span>
-          </button>
+            <figcaption>{option.label}</figcaption>
+          </figure>
         ))}
       </div>
+      <Field label="Preferred shape">
+        <select
+          onChange={(event) => actions.updateAlbum(album.id, {
+            coverPriority: event.target.value as LocalArchiveAlbum["coverPriority"]
+          })}
+          value={coverPriority}
+        >
+          {options.map((option) => (
+            <option key={option.type} value={option.type}>{option.label}</option>
+          ))}
+        </select>
+      </Field>
     </div>
   );
 }
@@ -961,4 +1032,14 @@ function assetBytes(photoId: string, assets: ReturnType<typeof useAdminArchive>[
   return assets
     .filter((asset) => asset.photoId === photoId)
     .reduce((sum, asset) => sum + asset.bytes, 0);
+}
+
+function photoAssetId(
+  archive: ReturnType<typeof useAdminArchive>["archive"],
+  photo: LocalArchivePhoto,
+  version: "display" | "thumb"
+) {
+  return archive.assets.find((asset) =>
+    asset.photoId === photo.id && asset.version === version
+  )?.id;
 }

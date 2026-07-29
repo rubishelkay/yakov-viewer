@@ -119,6 +119,19 @@ export const cloudArchiveMutationSchema = z.discriminatedUnion("action", [
     direction: z.enum(["left", "right"])
   }),
   z.object({
+    action: z.literal("moveAlbumInSet"),
+    setId: idSchema,
+    albumId: idSchema,
+    position: z.number().int().nonnegative()
+  }),
+  z.object({
+    action: z.literal("setAlbumSets"),
+    albumId: idSchema,
+    setIds: z.array(idSchema)
+      .max(100)
+      .refine((ids) => new Set(ids).size === ids.length, "Set IDs must be unique.")
+  }),
+  z.object({
     action: z.literal("createTag"),
     label: titleSchema,
     scope: tagScopeSchema.optional()

@@ -111,6 +111,7 @@ type CloudAdminContextValue = {
     deleteTag: (tagId: string) => void;
     detachAlbumTag: (albumId: string, tagId: string) => void;
     hidePhoto: (photoId: string) => void;
+    moveAlbumInSet: (setId: string, albumId: string, position: number) => void;
     movePhotoToPosition: (albumId: string, photoId: string, position: number) => void;
     moveAlbumToPosition: (albumId: string, position: number) => void;
     purgeItem: (itemId: string) => Promise<void>;
@@ -122,7 +123,8 @@ type CloudAdminContextValue = {
     reorderSet: (setId: string, direction: "up" | "down") => void;
     refreshArchive: () => Promise<void>;
     restoreItem: (itemId: string) => Promise<void>;
-    setAlbumCover: (albumId: string, coverType: CoverType, assetId: string) => void;
+    setAlbumCover: (albumId: string, coverType: CoverType, assetId: string) => Promise<void>;
+    setAlbumSets: (albumId: string, setIds: string[]) => Promise<void>;
     showPhoto: (photoId: string) => void;
     trashAlbum: (albumId: string) => Promise<void>;
     trashPhoto: (photoId: string) => Promise<void>;
@@ -379,6 +381,28 @@ export function CloudAdminArchiveProvider({ children }: Readonly<{ children: Rea
       updatePhotoOptimistically(optimistic, photoId, { status: "hidden", hiddenAt: timestamp() });
       void enqueueMutation({ action: "updatePhoto", photoId, update: { status: "hidden" } });
     },
+    moveAlbumInSet(setId, albumId, position) {
+      optimistic((current) => ({
+        ...current,
+        sets: current.sets.map((set) => {
+          if (set.id !== setId) return set;
+          const ordered = [...set.albumIdsWithOrder].sort((a, b) => a.position - b.position);
+          const currentIndex = ordered.findIndex((reference) => reference.albumId === albumId);
+          if (currentIndex < 0) return set;
+          const [moved] = ordered.splice(currentIndex, 1);
+          ordered.splice(Math.min(Math.max(position, 0), ordered.length), 0, moved);
+          return {
+            ...set,
+            albumIdsWithOrder: ordered.map((reference, index) => ({
+              ...reference,
+              featured: index === 0,
+              position: index
+            }))
+          };
+        })
+      }));
+      void enqueueMutation({ action: "moveAlbumInSet", setId, albumId, position });
+    },
     movePhotoToPosition(albumId, photoId, position) {
       void enqueueMutation({ action: "movePhoto", albumId, photoId, position }, true);
     },
@@ -421,7 +445,7 @@ export function CloudAdminArchiveProvider({ children }: Readonly<{ children: Rea
     async restoreItem(itemId) {
       await enqueueMutation({ action: "restoreItem", itemId }, true);
     },
-    setAlbumCover(albumId, coverType, assetId) {
+    async setAlbumCover(albumId, coverType, assetId) {
       optimistic((current) => ({
         ...current,
         albums: current.albums.map((album) => album.id === albumId
@@ -435,7 +459,10 @@ export function CloudAdminArchiveProvider({ children }: Readonly<{ children: Rea
             }
           : album)
       }));
-      void enqueueMutation({ action: "setAlbumCover", albumId, coverType, assetId });
+      await enqueueMutation({ action: "setAlbumCover", albumId, coverType, assetId }, true);
+    },
+    async setAlbumSets(albumId, setIds) {
+      await enqueueMutation({ action: "setAlbumSets", albumId, setIds }, true);
     },
     showPhoto(photoId) {
       updatePhotoOptimistically(optimistic, photoId, { status: "review", hiddenAt: undefined });

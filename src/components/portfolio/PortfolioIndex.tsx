@@ -10,6 +10,10 @@ import {
   type PublicAlbumSet,
   type PublicAlbumSummary
 } from "@/lib/portfolio";
+import {
+  nextPublicAlbumCount,
+  publicAlbumBatchSize
+} from "@/lib/progressive-albums";
 
 export function PortfolioIndex({
   albums = [],
@@ -58,14 +62,54 @@ export function PortfolioIndex({
               </nav>
             ) : null}
           </div>
-          <div className="portfolio-album-grid">
-            {section.albums.map((album) => (
-              <PortfolioAlbumCard album={album} key={album.id} />
-            ))}
-          </div>
+          <ProgressiveAlbumGrid albums={section.albums} />
         </section>
       ))}
     </main>
+  );
+}
+
+function ProgressiveAlbumGrid({ albums }: { albums: PublicAlbumSummary[] }) {
+  const [visibleCount, setVisibleCount] = useState(() =>
+    Math.min(publicAlbumBatchSize, albums.length)
+  );
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const hasMore = visibleCount < albums.length;
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasMore || typeof IntersectionObserver === "undefined") return;
+
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setVisibleCount((current) => nextPublicAlbumCount(current, albums.length));
+      }
+    }, { rootMargin: "600px 0px" });
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [albums.length, hasMore, visibleCount]);
+
+  return (
+    <>
+      <div className="portfolio-album-grid">
+        {albums.slice(0, visibleCount).map((album) => (
+          <PortfolioAlbumCard album={album} key={album.id} />
+        ))}
+      </div>
+      {hasMore ? (
+        <div className="portfolio-load-more" ref={sentinelRef}>
+          <button
+            onClick={() => setVisibleCount((current) =>
+              nextPublicAlbumCount(current, albums.length)
+            )}
+            type="button"
+          >
+            Load more
+          </button>
+          <span aria-live="polite">{visibleCount} / {albums.length}</span>
+        </div>
+      ) : null}
+    </>
   );
 }
 
