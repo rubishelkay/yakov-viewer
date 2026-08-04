@@ -2705,6 +2705,10 @@
   -webkit-backdrop-filter: blur(18px);
 }
 
+.admin-modal-backdrop--confirm {
+  z-index: 240;
+}
+
 .admin-confirm-dialog {
   width: min(460px, 100%);
   display: grid;
@@ -2736,10 +2740,525 @@
   line-height: 1.55;
 }
 
+.admin-logjam-page {
+  max-width: 1480px;
+}
+
+.admin-logjam-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.admin-logjam-metric {
+  min-height: 92px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  border: 1px solid var(--admin-border);
+  border-radius: 15px;
+  background: rgba(16, 16, 15, 0.74);
+  padding: 14px;
+}
+
+.admin-logjam-metric > span,
+.admin-logjam-user__avatar,
+.admin-logjam-submission__lock {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--admin-border);
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--admin-muted);
+}
+
+.admin-logjam-metric > span {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+}
+
+.admin-logjam-metric svg,
+.admin-logjam-user__avatar svg,
+.admin-logjam-submission__lock svg {
+  width: 17px;
+  height: 17px;
+}
+
+.admin-logjam-metric strong {
+  display: block;
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.admin-logjam-metric p {
+  margin: 5px 0 0;
+  color: var(--admin-dim);
+  font-size: 0.7rem;
+  font-weight: 680;
+  text-transform: uppercase;
+}
+
+.admin-logjam-message {
+  margin: 0 0 14px;
+  border: 1px solid rgba(219, 232, 200, 0.2);
+  border-radius: 12px;
+  background: rgba(219, 232, 200, 0.055);
+  color: var(--admin-good);
+  padding: 11px 13px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.admin-logjam-message--error {
+  border-color: rgba(240, 167, 160, 0.24);
+  background: rgba(240, 167, 160, 0.055);
+  color: var(--admin-danger);
+}
+
+.admin-logjam-message--action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.admin-logjam-message--action .admin-ghost-button {
+  flex: 0 0 auto;
+}
+
+.admin-logjam-users,
+.admin-logjam-curations,
+.admin-logjam-submissions {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-logjam-user {
+  padding: 18px;
+}
+
+.admin-logjam-user__head,
+.admin-logjam-user__identity,
+.admin-logjam-curation__head,
+.admin-logjam-submission-section__head,
+.admin-logjam-submission__title,
+.admin-logjam-promoted {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.admin-logjam-user__identity {
+  justify-content: flex-start;
+}
+
+.admin-logjam-user__avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+}
+
+.admin-logjam-user__identity h2,
+.admin-logjam-curation h3,
+.admin-logjam-submission-section h4,
+.admin-logjam-detail h2 {
+  margin: 0;
+  color: var(--admin-text);
+  letter-spacing: 0;
+}
+
+.admin-logjam-user__identity h2 {
+  font-size: 1.18rem;
+}
+
+.admin-logjam-user__identity a {
+  display: inline-block;
+  margin-top: 5px;
+  color: var(--admin-muted);
+  font-size: 0.74rem;
+}
+
+.admin-logjam-user__dates {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+  color: var(--admin-dim);
+  font-size: 0.68rem;
+}
+
+.admin-logjam-user__dates time {
+  color: var(--admin-muted);
+}
+
+.admin-logjam-rename {
+  display: grid;
+  grid-template-columns: minmax(220px, 420px) auto;
+  align-items: end;
+  gap: 8px;
+  margin-top: 16px;
+  border-top: 1px solid var(--admin-border);
+  padding-top: 14px;
+}
+
+.admin-logjam-curations {
+  margin-top: 18px;
+}
+
+.admin-logjam-curation {
+  border: 1px solid var(--admin-border);
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.018);
+  padding: 15px;
+}
+
+.admin-logjam-curation h3 {
+  font-size: 1rem;
+}
+
+.admin-logjam-curation__head > div > p:last-child,
+.admin-logjam-submission__summary p {
+  margin: 5px 0 0;
+  color: var(--admin-dim);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.admin-logjam-counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 13px;
+}
+
+.admin-logjam-counts > div {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--admin-border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.018);
+  padding: 9px;
+}
+
+.admin-logjam-counts span,
+.admin-logjam-promoted span,
+.admin-logjam-detail__meta span {
+  color: var(--admin-dim);
+  font-size: 0.63rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.admin-logjam-counts strong {
+  font-size: 0.92rem;
+}
+
+.admin-logjam-submission-section {
+  margin-top: 16px;
+  border-top: 1px solid var(--admin-border);
+  padding-top: 14px;
+}
+
+.admin-logjam-submission-section h4 {
+  font-size: 0.84rem;
+}
+
+.admin-logjam-submissions {
+  margin-top: 10px;
+  gap: 8px;
+}
+
+.admin-logjam-submission {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  background: rgba(6, 6, 6, 0.26);
+  padding: 10px;
+}
+
+.admin-logjam-submission[data-state="archived"] {
+  opacity: 0.72;
+}
+
+.admin-logjam-submission__summary {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+}
+
+.admin-logjam-submission__lock {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+}
+
+.admin-logjam-submission__title {
+  min-width: 0;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-logjam-submission__title strong {
+  overflow: hidden;
+  font-size: 0.78rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-logjam-submission__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.admin-logjam-promoted {
+  min-width: 250px;
+  align-items: center;
+}
+
+.admin-logjam-promoted > div {
+  display: grid;
+  gap: 3px;
+}
+
+.admin-logjam-promoted strong,
+.admin-logjam-promoted small {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-logjam-promoted strong {
+  font-size: 0.76rem;
+}
+
+.admin-logjam-promoted small {
+  color: var(--admin-good);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+}
+
+.admin-status[data-status="active"],
+.admin-status[data-status="submitted"] {
+  border-color: rgba(244, 217, 166, 0.24);
+  color: var(--admin-warn);
+}
+
+.admin-status[data-status="promoted"] {
+  border-color: rgba(219, 232, 200, 0.22);
+  color: var(--admin-good);
+}
+
+.admin-status[data-status="archived"],
+.admin-status[data-status="locked"] {
+  border-color: rgba(240, 167, 160, 0.22);
+  color: var(--admin-danger);
+}
+
+.admin-logjam-detail-backdrop {
+  align-items: center;
+  padding: 18px;
+}
+
+.admin-logjam-detail {
+  width: min(1380px, 100%);
+  max-height: calc(100vh - 36px);
+  overflow: auto;
+  border: 1px solid var(--admin-border-strong);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 280px),
+    var(--admin-surface);
+  box-shadow: 0 40px 120px rgba(0, 0, 0, 0.62);
+  padding: 18px;
+}
+
+.admin-logjam-detail__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+}
+
+.admin-logjam-detail h2 {
+  font-size: clamp(1.5rem, 4vw, 2.7rem);
+}
+
+.admin-logjam-detail__head p:last-child {
+  margin: 7px 0 0;
+  color: var(--admin-muted);
+  font-size: 0.76rem;
+}
+
+.admin-logjam-detail__close {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--admin-border);
+  border-radius: 11px;
+  background: var(--admin-surface-2);
+  color: var(--admin-text);
+  cursor: pointer;
+}
+
+.admin-logjam-detail__close svg {
+  width: 17px;
+  height: 17px;
+}
+
+.admin-logjam-detail__meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.admin-logjam-detail__meta > div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--admin-border);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 10px;
+}
+
+.admin-logjam-detail__meta strong,
+.admin-logjam-detail__meta small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-logjam-detail__meta strong {
+  font-size: 0.8rem;
+}
+
+.admin-logjam-detail__meta small {
+  color: var(--admin-dim);
+  font-size: 0.67rem;
+}
+
+.admin-logjam-detail__photos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(138px, 1fr));
+  align-items: start;
+  gap: 9px;
+}
+
+.admin-logjam-detail__photos figure {
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--admin-border);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.018);
+  padding: 7px;
+}
+
+.admin-logjam-detail__photos figure[data-available="false"] {
+  border-color: rgba(240, 167, 160, 0.26);
+}
+
+.admin-logjam-detail__photo {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--admin-surface-2);
+}
+
+.admin-logjam-detail__photo img,
+.admin-logjam-detail__photo .admin-image-placeholder {
+  width: 100%;
+  aspect-ratio: var(--logjam-photo-aspect, 1 / 1);
+  display: grid;
+  place-items: center;
+  object-fit: contain;
+  color: var(--admin-danger);
+  font-size: 0.66rem;
+}
+
+.admin-logjam-detail__photo > span:last-child {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  min-width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.68);
+  color: #fff;
+  font-size: 0.64rem;
+  font-weight: 720;
+}
+
+.admin-logjam-detail__photos figcaption {
+  display: grid;
+  gap: 3px;
+  padding: 7px 2px 1px;
+}
+
+.admin-logjam-detail__photos figcaption strong,
+.admin-logjam-detail__photos figcaption small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-logjam-detail__photos figcaption strong {
+  font-size: 0.7rem;
+}
+
+.admin-logjam-detail__photos figcaption small {
+  color: var(--admin-dim);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+}
+
+.admin-logjam-detail__footer {
+  position: sticky;
+  bottom: -18px;
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) auto;
+  align-items: end;
+  gap: 9px;
+  margin: 18px -18px -18px;
+  border-top: 1px solid var(--admin-border-strong);
+  background: rgba(13, 13, 13, 0.96);
+  padding: 14px 18px 18px;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.admin-logjam-detail__footer .admin-muted {
+  margin: 0;
+  align-self: center;
+}
+
+.admin-logjam-promoted--detail {
+  grid-column: 1 / -1;
+}
+
 @media (max-width: 1180px) {
   .admin-metric-grid,
   .admin-mini-dashboard,
-  .admin-settings-grid {
+  .admin-settings-grid,
+  .admin-logjam-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -2773,6 +3292,15 @@
 
   .admin-tags-toolbar {
     grid-template-columns: 1fr;
+  }
+
+  .admin-logjam-submission {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-logjam-submission__actions,
+  .admin-logjam-promoted {
+    justify-content: flex-start;
   }
 }
 
@@ -2819,5 +3347,40 @@
   .admin-rail__link,
   .admin-rail__status {
     justify-content: center;
+  }
+
+  .admin-logjam-user__head,
+  .admin-logjam-curation__head {
+    display: grid;
+  }
+
+  .admin-logjam-message--action {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-logjam-user__dates {
+    justify-items: start;
+  }
+
+  .admin-logjam-detail-backdrop {
+    padding: 8px;
+  }
+
+  .admin-logjam-detail {
+    max-height: calc(100vh - 16px);
+    border-radius: 13px;
+    padding: 13px;
+  }
+
+  .admin-logjam-detail__meta,
+  .admin-logjam-detail__footer {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-logjam-detail__footer {
+    bottom: -13px;
+    margin: 14px -13px -13px;
+    padding: 12px 13px 13px;
   }
 }

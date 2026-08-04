@@ -22,7 +22,13 @@ Next.js + OpenNext Worker
   admin/public route handlers
 
 Cloudflare Access
-  exact owner email
+  exact owner email for /admin
+  invited curator emails for LogJam writes
+
+Separate LogJam Worker
+  public published-album catalog
+  /auth/start* and /api/private/* protected by Access
+  global keep/pass decisions and mixed-photo curations
 
 D1 yakov_archive
   source of truth for sets, albums, memberships, photos, tags, settings, Bin
@@ -93,8 +99,26 @@ friction. Likely later milestones:
 - private Google Drive `master` references;
 - automatic/queued image processing;
 - multi-tag archive search;
-- collections and Logjamming;
+- collections;
 - GitHub-triggered Cloudflare production builds.
+
+## LogJam Local Checkpoint
+
+The curator product is implemented as a separate `logjam/` Worker and SPA in this
+repository. It reads only published canonical albums/photos from the shared D1 and
+never copies media. Public browsing is anonymous; the first write is replayed after an
+invite-only Cloudflare Access email-OTP login. Decisions are global per user/photo,
+and private curations can combine photos from any source album.
+
+Submit seals immutable, ordered versions. `/admin/logjam` lets the owner review a
+version and atomically promote it into one canonical draft Album. The source curation
+locks permanently after that Album has ever been published. Database triggers,
+request-size guards, mutation rate limits, and per-user/per-curation caps enforce the
+first small-cohort operating envelope.
+
+No production LogJam migration, Access application, domain, Worker deployment, GitHub
+push, or build integration is implied by the local implementation. Those external
+changes require a separate exact brief and owner confirmation.
 
 ## Done Means
 

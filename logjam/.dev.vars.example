@@ -1,0 +1,11 @@
+# Local-only example. Copy to .dev.vars; never commit the real file.
+RUNTIME_ENV=local
+ACCESS_ENABLED=false
+LOCAL_AUTH_BYPASS=true
+LOCAL_AUTH_USER_ID=local-curator
+LOCAL_AUTH_EMAIL=curator@example.test
+LOCAL_AUTH_NAME=Local curator
+
+# Required in production instead of the local bypass values above.
+ACCESS_TEAM_DOMAIN=https://REPLACE.cloudflareaccess.com
+ACCESS_APP_AUD=REPLACE_WITH_LOGJAM_ACCESS_AUD

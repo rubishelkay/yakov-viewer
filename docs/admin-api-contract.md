@@ -24,10 +24,13 @@ production Worker; production additionally has `ADMIN_ACCESS_ENABLED=true`.
 ```txt
 GET  /api/admin/archive
 GET  /api/admin/albums
+GET  /api/admin/logjam
+GET  /api/admin/logjam/submissions/:submissionId
 POST /api/admin/albums
 POST /api/admin/albums/:albumId/photos
 GET  /api/admin/assets/:assetId
 POST /api/admin/mutations
+POST /api/admin/logjam/mutations
 ```
 
 `GET /api/admin/archive` returns the normalized Set, Album, AlbumPhoto, Photo, Asset,
@@ -65,6 +68,56 @@ existing result.
 
 `GET /api/admin/assets/:assetId` is an owner-protected inspector stream. It resolves the
 bucket from D1 and never accepts an arbitrary object key from the client.
+
+## LogJam Owner Endpoints
+
+`GET /api/admin/logjam` returns the compact owner overview:
+
+```txt
+users[]
+  id, email, displayName, createdAt, lastSeenAt
+
+curations[]
+  id, userId, title, status, locked, revision, photoCount, createdAt, updatedAt
+  submissions[]
+    id, version, sourceRevision, title, status, photoCount, submittedAt, archivedAt
+    promotedAlbumId, promotedAlbumStatus, promotedAt
+```
+
+`status` is `active | archived` for a working curation and `submitted | archived` for
+an immutable submission. `locked=true` means a promoted canonical album has been
+published at least once, so the curator can no longer mutate that working curation even
+if the album is later unpublished.
+
+The overview intentionally omits the photo arrays. Opening a submitted version lazily
+calls `GET /api/admin/logjam/submissions/:submissionId`, which returns:
+
+```txt
+submission
+  overview fields + curationId, userId, userEmail, userDisplayName
+
+photos[] in immutable submission order
+  id, position, title, thumbUrl, displayUrl, width, height, available, published
+```
+
+Photo metadata and URLs are nullable when a canonical photo is missing. The admin must
+show those gaps and block promotion until every submitted photo is available; it must
+not silently drop or reorder missing rows.
+
+`POST /api/admin/logjam/mutations` accepts exactly three owner actions:
+
+```json
+{ "action": "rename-user", "userId": "user-id", "displayName": "Curator name" }
+{ "action": "rename-user", "userId": "user-id", "displayName": null }
+{ "action": "archive-submission", "submissionId": "submission-id" }
+{ "action": "promote-submission", "submissionId": "submission-id", "title": "Optional override" }
+```
+
+Rename returns `{ userId, displayName }`. Archive returns
+`{ submissionId, status, archivedAt }`. Promotion returns
+`{ submissionId, albumId, albumSlug, albumStatus, created }`; a retry returns the same
+canonical album with `created=false`. Promotion creates a canonical Album and ordered
+AlbumPhoto memberships without copying any Photo or R2 Asset.
 
 ## Mutation Endpoint
 

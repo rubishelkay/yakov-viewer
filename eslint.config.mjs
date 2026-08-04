@@ -16,6 +16,7 @@ export default defineConfig([
     ".wrangler/**",
     "out/**",
     "legacy/**",
+    "logjam/**",
     "next-env.d.ts"
   ])
 ]);

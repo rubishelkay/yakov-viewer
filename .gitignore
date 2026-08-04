@@ -9,6 +9,7 @@
 .next/
 out/
 node_modules/
+.pnpm-store/
 *.log
 pnpm-debug.log*
 tsconfig.tsbuildinfo

@@ -1,0 +1,38 @@
+{
+  "name": "yakov-logjam",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "vite",
+    "dev:worker": "wrangler dev",
+    "build": "tsc -b && vite build",
+    "check": "pnpm typecheck && pnpm test && pnpm build",
+    "preview": "wrangler dev",
+    "deploy": "pnpm run build && wrangler deploy",
+    "typecheck": "tsc -b --pretty false",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "jose": "^6.1.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260730.1",
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "@vitejs/plugin-react": "^5.0.0",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.2",
+    "vitest": "^3.2.4",
+    "wrangler": "^4.28.1"
+  },
+  "pnpm": {
+    "overrides": {
+      "undici": "^7.29.0"
+    }
+  }
+}
