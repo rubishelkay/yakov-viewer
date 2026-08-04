@@ -73,6 +73,11 @@ photo already committed to D1/R2; resume by uploading only the missing files. Pu
 album grids reveal cards in ordered batches of 15 while image elements keep native lazy
 loading.
 
+Album pages end with previous/next navigation in published archive order; the copyright
+year comes from the Worker runtime clock. A Random photo deep link renders its selected
+display image before mounting the contact sheet, then preloads adjacent frames and lets
+the remaining grid continue lazily.
+
 Before the 2026-07-30 usability update, source commit `efdf3ee` was preserved as Git
 tag `yakov-viewer-checkpoint-2026-07-30`. A matching D1 metadata export is kept outside
 the repository at `~/Downloads/yakov_archive_checkpoint_2026-07-30.sql`.

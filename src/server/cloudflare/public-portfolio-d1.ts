@@ -47,6 +47,20 @@ type HomepageSetRow = {
   title: string;
 };
 
+type AlbumNavigationRow = Pick<PublicAlbumSummary, "id" | "slug" | "title">;
+
+export const readPublicAlbumNavigation = cache(async (): Promise<AlbumNavigationRow[]> => {
+  const { env } = await getCloudflareContext({ async: true });
+  const result = await env.DB.prepare(`
+    SELECT id, slug, title
+    FROM archive_albums
+    WHERE status = 'published'
+    ORDER BY sort_order, created_at
+  `).all<AlbumNavigationRow>();
+
+  return rows<AlbumNavigationRow>(result);
+});
+
 export const readPublicAlbums = cache(async (): Promise<PublicAlbumSummary[]> => {
   const { env } = await getCloudflareContext({ async: true });
   const [albumResult, albumTagResult, filterTagResult] = await env.DB.batch([

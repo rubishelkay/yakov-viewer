@@ -20,17 +20,29 @@ import { PortfolioTagLinks } from "@/components/portfolio/PortfolioTagLinks";
 import type { PublicAlbumDetail, PublicPhoto } from "@/lib/portfolio";
 
 type ViewMode = "s" | "m" | "l";
+type AlbumNavigationTarget = { slug: string; title: string };
 
 const viewModeKey = "yakov-public-view-mode";
 const viewModeListeners = new Set<() => void>();
 
-export function PortfolioAlbum({ album }: { album: PublicAlbumDetail }) {
+export function PortfolioAlbum({
+  album,
+  currentYear,
+  nextAlbum,
+  previousAlbum
+}: {
+  album: PublicAlbumDetail;
+  currentYear: number;
+  nextAlbum?: AlbumNavigationTarget;
+  previousAlbum?: AlbumNavigationTarget;
+}) {
   const searchParams = useSearchParams();
   const photos = album.photos;
+  const initialPhotoIndex = parsePhotoIndex(searchParams.get("photo"), photos.length);
   const mode = useSyncExternalStore(subscribeToViewMode, getStoredViewMode, getServerViewMode);
-  const [openIndex, setOpenIndex] = useState<number | null>(() =>
-    parsePhotoIndex(searchParams.get("photo"), photos.length)
-  );
+  const [openIndex, setOpenIndex] = useState<number | null>(initialPhotoIndex);
+  const [gridReady, setGridReady] = useState(initialPhotoIndex === null);
+  const adjacentPreloads = useRef<HTMLImageElement[]>([]);
 
   function setViewMode(next: ViewMode) {
     window.localStorage.setItem(viewModeKey, next);
@@ -42,14 +54,35 @@ export function PortfolioAlbum({ album }: { album: PublicAlbumDetail }) {
     window.history.replaceState(null, "", `/albums/${album.slug}?photo=${index + 1}`);
   }, [album.slug]);
   const closePhoto = useCallback(() => {
+    setGridReady(true);
     setOpenIndex(null);
     window.history.replaceState(null, "", `/albums/${album.slug}`);
   }, [album.slug]);
 
+  const revealGridAfterPhoto = useCallback((index: number) => {
+    if (gridReady) return;
+
+    const adjacentIndexes = [
+      (index - 1 + photos.length) % photos.length,
+      (index + 1) % photos.length
+    ].filter((value, position, values) => value !== index && values.indexOf(value) === position);
+    adjacentPreloads.current = adjacentIndexes.flatMap((value) => {
+      const source = photos[value]?.displayUrl;
+      if (!source) return [];
+      const image = new Image();
+      image.decoding = "async";
+      image.src = source;
+      return [image];
+    });
+    setGridReady(true);
+  }, [gridReady, photos]);
+
   useEffect(() => {
     const syncFromHistory = () => {
       const value = new URL(window.location.href).searchParams.get("photo");
-      setOpenIndex(parsePhotoIndex(value, photos.length));
+      const nextIndex = parsePhotoIndex(value, photos.length);
+      if (nextIndex === null) setGridReady(true);
+      setOpenIndex(nextIndex);
     };
     window.addEventListener("popstate", syncFromHistory);
     return () => window.removeEventListener("popstate", syncFromHistory);
@@ -64,10 +97,17 @@ export function PortfolioAlbum({ album }: { album: PublicAlbumDetail }) {
         </div>
         <ViewModeToggle mode={mode} onChange={setViewMode} />
       </header>
-      <PortfolioPhotoGrid
-        mode={mode}
-        onOpen={openPhoto}
-        photos={photos}
+      {gridReady ? (
+        <PortfolioPhotoGrid
+          mode={mode}
+          onOpen={openPhoto}
+          photos={photos}
+        />
+      ) : null}
+      <AlbumFooter
+        currentYear={currentYear}
+        nextAlbum={nextAlbum}
+        previousAlbum={previousAlbum}
       />
       {openIndex !== null ? (
         <PortfolioViewer
@@ -75,10 +115,52 @@ export function PortfolioAlbum({ album }: { album: PublicAlbumDetail }) {
           index={openIndex}
           onClose={closePhoto}
           onNavigate={openPhoto}
+          onPhotoReady={revealGridAfterPhoto}
           photos={photos}
+          priority={!gridReady}
         />
       ) : null}
     </main>
+  );
+}
+
+function AlbumFooter({
+  currentYear,
+  nextAlbum,
+  previousAlbum
+}: {
+  currentYear: number;
+  nextAlbum?: AlbumNavigationTarget;
+  previousAlbum?: AlbumNavigationTarget;
+}) {
+  return (
+    <footer className="portfolio-album-footer">
+      <span className="portfolio-album-footer__previous">
+        {previousAlbum ? (
+          <a
+            aria-label={`Previous album: ${previousAlbum.title}`}
+            href={`/albums/${previousAlbum.slug}`}
+            title={previousAlbum.title}
+          >
+            <ChevronLeft aria-hidden />
+            Previous
+          </a>
+        ) : null}
+      </span>
+      <span className="portfolio-album-footer__copyright">© {currentYear}</span>
+      <span className="portfolio-album-footer__next">
+        {nextAlbum ? (
+          <a
+            aria-label={`Next album: ${nextAlbum.title}`}
+            href={`/albums/${nextAlbum.slug}`}
+            title={nextAlbum.title}
+          >
+            Next
+            <ChevronRight aria-hidden />
+          </a>
+        ) : null}
+      </span>
+    </footer>
   );
 }
 
@@ -334,13 +416,17 @@ function PortfolioViewer({
   index,
   onClose,
   onNavigate,
-  photos
+  onPhotoReady,
+  photos,
+  priority
 }: {
   albumTitle: string;
   index: number;
   onClose: () => void;
   onNavigate: (index: number) => void;
+  onPhotoReady: (index: number) => void;
   photos: PublicPhoto[];
+  priority: boolean;
 }) {
   const photo = photos[index];
   const viewerRef = useRef<HTMLDivElement>(null);
@@ -695,9 +781,14 @@ function PortfolioViewer({
         {source ? (
           <PortfolioImage
             alt={photo.title}
+            decoding="async"
             draggable={false}
+            fetchPriority={priority ? "high" : "auto"}
             height={photo.height}
             key={`${photo.id}:${zoomed ? "expanded" : "display"}`}
+            loading="eager"
+            onError={() => onPhotoReady(index)}
+            onLoad={() => onPhotoReady(index)}
             src={source}
             width={photo.width}
             wrapperClassName="portfolio-viewer__image"
