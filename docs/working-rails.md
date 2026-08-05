@@ -125,7 +125,10 @@ Workers Builds is connected to that branch with `/logjam` as the root, `pnpm che
 the build gate, and a deploy command that applies the shared D1 migrations before
 deploying `yakov-logjam`; non-production builds are disabled. Cloudflare's initial
 automatic probe of the default `main` branch stopped before execution because that
-branch has no `/logjam` directory, so production D1 was unchanged.
+branch has no `/logjam` directory, so production D1 was unchanged. The existing
+`yakov-viewer` Worker is also connected to `codex/logjam`: its build gate runs the full
+root `pnpm check` followed by the OpenNext packaging step, and only then runs the
+OpenNext production deploy. Preview-branch builds are disabled for both Workers.
 
 ## Done Means
 
