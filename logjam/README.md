@@ -70,7 +70,8 @@ Production checkpoint on 2026-08-05:
 - The self-hosted Access application `Yakov LogJam` protects only `/auth/start`, `/auth/start/*`, `/api/private`, and `/api/private/*` on `logjam.shmol.cc`.
 - Its 24-hour Allow policy accepts only One-time PIN, and the exact application AUD is committed in `wrangler.jsonc` for Worker-side JWT validation.
 - The public `/` and `/api/public/*` routes remain outside Access.
-- Production D1 migrations, the `yakov-logjam` Worker/custom domain, and GitHub-triggered Workers Builds are still pending.
+- GitHub-triggered Workers Builds is connected to `rubishelkay/yakov-viewer` with production branch `codex/logjam`, root directory `/logjam`, and non-production builds disabled. The build runs `pnpm check`; only after it passes, the deploy command applies pending D1 migrations through Wrangler and deploys `yakov-logjam` with its custom domain.
+- Cloudflare's automatic setup probe used the repository default branch `main` and stopped at "root directory not found" before running the build or deploy command. It did not touch production D1; the next production-branch push starts the real guarded deployment.
 
 Before the first deploy:
 

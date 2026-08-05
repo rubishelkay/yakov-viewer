@@ -120,9 +120,12 @@ first small-cohort operating envelope.
 
 The `codex/logjam` branch is pushed to GitHub. On 2026-08-05 the owner confirmed and
 created the production `Yakov LogJam` Access application with One-time PIN, four
-private-path destinations, a 24-hour policy, and Worker-side AUD validation. Production
-D1 migrations, the `yakov-logjam` Worker/custom domain, and GitHub-triggered Workers
-Builds remain pending and still require an exact deployment brief and confirmation.
+private-path destinations, a 24-hour policy, and Worker-side AUD validation. Cloudflare
+Workers Builds is connected to that branch with `/logjam` as the root, `pnpm check` as
+the build gate, and a deploy command that applies the shared D1 migrations before
+deploying `yakov-logjam`; non-production builds are disabled. Cloudflare's initial
+automatic probe of the default `main` branch stopped before execution because that
+branch has no `/logjam` directory, so production D1 was unchanged.
 
 ## Done Means
 
