@@ -3,8 +3,17 @@ import { z } from "zod";
 const idSchema = z.string().trim().min(1).max(200);
 const displayNameSchema = z.string().trim().min(1).max(120).nullable();
 const promotionTitleSchema = z.string().trim().min(1).max(160);
+const inviteEmailSchema = z.string().trim().max(254).email().transform((email) => email.toLowerCase());
 
 export const logjamAdminMutationSchema = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("invite-email"),
+    email: inviteEmailSchema
+  }),
+  z.object({
+    action: z.literal("revoke-invite"),
+    email: inviteEmailSchema
+  }),
   z.object({
     action: z.literal("rename-user"),
     userId: idSchema,

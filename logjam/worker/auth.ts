@@ -55,6 +55,25 @@ export async function requireAccessIdentity(request: Request, env: Env): Promise
   }
 }
 
+export async function requireInvitation(
+  db: D1Database,
+  identity: AccessIdentity
+): Promise<void> {
+  const email = normalizeEmail(identity.email);
+  const invitation = await db.prepare(`
+    SELECT email_normalized
+    FROM logjam_invites
+    WHERE email_normalized = ?
+  `).bind(email).first<{ email_normalized: string }>();
+  if (!invitation) {
+    throw new HttpError(
+      403,
+      "invitation_required",
+      "This email has not been invited to LogJam. Ask the owner for access."
+    );
+  }
+}
+
 export async function ensureAppUser(db: D1Database, identity: AccessIdentity): Promise<AppUser> {
   const existing = await readIdentityUser(db, identity);
   if (existing) return syncIdentityUser(db, existing, identity);

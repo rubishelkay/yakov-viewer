@@ -8,8 +8,11 @@ import {
   FolderUp,
   ListChecks,
   LockKeyhole,
+  MailPlus,
   RefreshCw,
   Save,
+  ShieldCheck,
+  Trash2,
   X,
   UserRound,
   UsersRound
@@ -21,6 +24,7 @@ import {
   readLogjamAdmin,
   readLogjamSubmissionDetail,
   type LogjamAdminCuration,
+  type LogjamAdminInvite,
   type LogjamAdminMutation,
   type LogjamAdminSnapshot,
   type LogjamAdminSubmission,
@@ -29,6 +33,9 @@ import {
 } from "@/admin/logjam-admin-api";
 import { useAdminArchive } from "@/admin/cloud-admin-state";
 import { useAdminConfirmDialog } from "@/components/admin/AdminConfirmDialog";
+
+const logjamUrl = "https://logjam.shmol.cc";
+const protectedOwnerEmail = "jacobjshmol@gmail.com";
 
 const timestampFormatter = new Intl.DateTimeFormat("en", {
   dateStyle: "medium",
@@ -44,6 +51,7 @@ export function LogjamAdmin() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [pendingAction, setPendingAction] = useState("");
+  const [inviteAddress, setInviteAddress] = useState("");
   const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
   const [titleOverrides, setTitleOverrides] = useState<Record<string, string>>({});
   const [selectedSubmissionId, setSelectedSubmissionId] = useState("");
@@ -168,6 +176,33 @@ export function LogjamAdmin() {
     );
   }
 
+  async function addInvitation() {
+    const email = inviteAddress.trim();
+    if (!email) return;
+    const invited = await runMutation(
+      `invite:${email.toLowerCase()}`,
+      { action: "invite-email", email },
+      `LogJam access is allowed for ${email.toLowerCase()}. Share the LogJam link manually.`
+    );
+    if (invited) setInviteAddress("");
+  }
+
+  async function revokeInvitation(invitation: LogjamAdminInvite) {
+    if (invitation.email === protectedOwnerEmail) return;
+    const confirmed = await confirm({
+      confirmLabel: "Revoke access",
+      message: `Remove ${invitation.email} from the LogJam access list? Their existing decisions and curations will be preserved.`,
+      title: "Revoke LogJam access"
+    });
+    if (!confirmed) return;
+
+    await runMutation(
+      `revoke:${invitation.email}`,
+      { action: "revoke-invite", email: invitation.email },
+      `LogJam access revoked for ${invitation.email}. Existing work was preserved.`
+    );
+  }
+
   async function archiveSubmission(submission: LogjamAdminSubmission) {
     if (submission.promotedAlbumId || isArchived(submission)) return;
     const confirmed = await confirm({
@@ -259,28 +294,40 @@ export function LogjamAdmin() {
             Retry overview
           </button>
         </div>
-      ) : snapshot?.users.length ? (
-        <div className="admin-logjam-users">
-          {snapshot.users.map((user) => (
-            <LogjamUserPanel
-              curations={snapshot.curations.filter((curation) => curation.userId === user.id)}
-              displayName={displayNames[user.id] ?? ""}
-              key={user.id}
-              onArchive={archiveSubmission}
-              onDisplayNameChange={(value) => setDisplayNames((current) => ({
-                ...current,
-                [user.id]: value
-              }))}
-              onReview={reviewSubmission}
-              onRename={renameUser}
-              pendingAction={pendingAction}
-              user={user}
-            />
-          ))}
-        </div>
-      ) : (
-        <div className="admin-inline-empty">No LogJam users yet. Curators appear after their first authenticated session.</div>
-      )}
+      ) : snapshot ? (
+        <>
+          <LogjamInvitesPanel
+            inviteAddress={inviteAddress}
+            invitations={snapshot.invites}
+            onAddressChange={setInviteAddress}
+            onInvite={addInvitation}
+            onRevoke={revokeInvitation}
+            pendingAction={pendingAction}
+          />
+          {snapshot.users.length ? (
+            <div className="admin-logjam-users">
+              {snapshot.users.map((user) => (
+                <LogjamUserPanel
+                  curations={snapshot.curations.filter((curation) => curation.userId === user.id)}
+                  displayName={displayNames[user.id] ?? ""}
+                  key={user.id}
+                  onArchive={archiveSubmission}
+                  onDisplayNameChange={(value) => setDisplayNames((current) => ({
+                    ...current,
+                    [user.id]: value
+                  }))}
+                  onReview={reviewSubmission}
+                  onRename={renameUser}
+                  pendingAction={pendingAction}
+                  user={user}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="admin-inline-empty">No LogJam users yet. Curators appear after their first authenticated session.</div>
+          )}
+        </>
+      ) : null}
 
       {selectedSubmissionId ? (
         <LogjamSubmissionDetailDialog
@@ -299,6 +346,111 @@ export function LogjamAdmin() {
         />
       ) : null}
     </div>
+  );
+}
+
+function LogjamInvitesPanel({
+  inviteAddress,
+  invitations,
+  onAddressChange,
+  onInvite,
+  onRevoke,
+  pendingAction
+}: {
+  inviteAddress: string;
+  invitations: LogjamAdminInvite[];
+  onAddressChange: (value: string) => void;
+  onInvite: () => Promise<void>;
+  onRevoke: (invitation: LogjamAdminInvite) => Promise<void>;
+  pendingAction: string;
+}) {
+  return (
+    <section className="admin-panel admin-logjam-invites">
+      <header className="admin-panel__head">
+        <div>
+          <p className="admin-kicker">Access list</p>
+          <h2>Invite curators</h2>
+          <p className="admin-panel__copy">
+            Add an email here, then share{" "}
+            <a href={logjamUrl} rel="noreferrer" target="_blank">logjam.shmol.cc</a> manually.
+            {" "}No invitation email is sent in this first version.
+          </p>
+        </div>
+        <span className="admin-count" aria-label={`${invitations.length} allowed emails`}>
+          {invitations.length}
+        </span>
+      </header>
+
+      <form
+        className="admin-logjam-invite-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void onInvite();
+        }}
+      >
+        <label className="admin-field">
+          <span>Email allowed to use LogJam</span>
+          <input
+            autoComplete="email"
+            inputMode="email"
+            maxLength={254}
+            onChange={(event) => onAddressChange(event.target.value)}
+            placeholder="friend@example.com"
+            required
+            type="email"
+            value={inviteAddress}
+          />
+        </label>
+        <button
+          className="admin-button admin-button--primary"
+          disabled={Boolean(pendingAction) || !inviteAddress.trim()}
+          type="submit"
+        >
+          <MailPlus aria-hidden />
+          {pendingAction.startsWith("invite:") ? "Adding" : "Allow email"}
+        </button>
+      </form>
+
+      <div className="admin-logjam-invite-list" aria-label="Allowed LogJam emails">
+        {invitations.map((invitation) => {
+          const owner = invitation.email === protectedOwnerEmail;
+          const isRevoking = pendingAction === `revoke:${invitation.email}`;
+          return (
+            <div className="admin-logjam-invite" key={invitation.email}>
+              <span className="admin-logjam-invite__icon" aria-hidden>
+                {owner ? <ShieldCheck /> : <UserRound />}
+              </span>
+              <div className="admin-logjam-invite__identity">
+                <a href={`mailto:${invitation.email}`}>{invitation.email}</a>
+                <small>
+                  Invited <TimestampValue value={invitation.invitedAt} />
+                </small>
+              </div>
+              <span
+                className="admin-status"
+                data-status={invitation.joinedAt ? "published" : "review"}
+              >
+                {invitation.joinedAt ? "Joined" : "Not used yet"}
+              </span>
+              {owner ? (
+                <span className="admin-logjam-invite__owner">Owner · permanent</span>
+              ) : (
+                <button
+                  aria-label={`Revoke LogJam access for ${invitation.email}`}
+                  className="admin-danger-button"
+                  disabled={Boolean(pendingAction)}
+                  onClick={() => void onRevoke(invitation)}
+                  type="button"
+                >
+                  <Trash2 aria-hidden />
+                  {isRevoking ? "Revoking" : "Revoke"}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

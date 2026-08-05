@@ -1,5 +1,10 @@
 import { isDecision, normalizePhotoIds, normalizeTitle } from "../shared/logic";
-import { authStartResponse, ensureAppUser, requireAccessIdentity } from "./auth";
+import {
+  authStartResponse,
+  ensureAppUser,
+  requireAccessIdentity,
+  requireInvitation
+} from "./auth";
 import type { AppUser, Env } from "./env";
 import { errorResponse, HttpError, json, methodNotAllowed, readJsonObject } from "./http";
 import {
@@ -21,6 +26,7 @@ export default {
       if (url.pathname === "/auth/start" || url.pathname === "/auth/start/") {
         if (request.method !== "GET") methodNotAllowed(["GET"]);
         const identity = await requireAccessIdentity(request, env);
+        await requireInvitation(env.DB, identity);
         await ensureAppUser(env.DB, identity);
         return authStartResponse(url);
       }
@@ -33,6 +39,7 @@ export default {
         enforcePrivateMutation(request);
         const identity = await requireAccessIdentity(request, env);
         await enforcePrivateRequestRate(request, env, url, identity.sub);
+        await requireInvitation(env.DB, identity);
         const user = await ensureAppUser(env.DB, identity);
         return await handlePrivate(request, env, url, user);
       }

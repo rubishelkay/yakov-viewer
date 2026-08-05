@@ -23,7 +23,7 @@ Next.js + OpenNext Worker
 
 Cloudflare Access
   exact owner email for /admin
-  invited curator emails for LogJam writes
+  verified email OTP for LogJam writes
 
 Separate LogJam Worker
   public published-album catalog
@@ -31,7 +31,8 @@ Separate LogJam Worker
   global keep/pass decisions and mixed-photo curations
 
 D1 yakov_archive
-  source of truth for sets, albums, memberships, photos, tags, settings, Bin
+  source of truth for sets, albums, memberships, photos, tags, settings, Bin,
+  and the LogJam invitation allow-list
 
 R2 yakov-public-assets
   thumb, display, expanded
@@ -106,8 +107,9 @@ friction. Likely later milestones:
 
 The curator product is implemented as a separate `logjam/` Worker and SPA in this
 repository. It reads only published canonical albums/photos from the shared D1 and
-never copies media. Public browsing is anonymous; the first write is replayed after an
-invite-only Cloudflare Access email-OTP login. Decisions are global per user/photo,
+never copies media. Public browsing is anonymous; the first write is replayed after a
+Cloudflare Access email-OTP login and a D1 invitation check. The owner manages invites
+in `/admin/logjam` and shares the link manually. Decisions are global per user/photo,
 and private curations can combine photos from any source album.
 
 Submit seals immutable, ordered versions. `/admin/logjam` lets the owner review a

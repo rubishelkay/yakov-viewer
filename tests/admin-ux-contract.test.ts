@@ -54,6 +54,27 @@ test("public album batches grow by fifteen and stop at the total", () => {
 
 test("LogJam owner mutations target identities and immutable submissions only", () => {
   assert.deepEqual(logjamAdminMutationSchema.parse({
+    action: "invite-email",
+    email: " Friend@Example.COM "
+  }), {
+    action: "invite-email",
+    email: "friend@example.com"
+  });
+
+  assert.deepEqual(logjamAdminMutationSchema.parse({
+    action: "revoke-invite",
+    email: "friend@example.com"
+  }), {
+    action: "revoke-invite",
+    email: "friend@example.com"
+  });
+
+  assert.throws(() => logjamAdminMutationSchema.parse({
+    action: "invite-email",
+    email: "not-an-email"
+  }));
+
+  assert.deepEqual(logjamAdminMutationSchema.parse({
     action: "rename-user",
     userId: "user-1",
     displayName: " Curator One "
@@ -100,6 +121,11 @@ test("LogJam owner mutations target identities and immutable submissions only", 
 
 test("LogJam admin snapshot separates mutable locked state from immutable versions", () => {
   const snapshot = logjamAdminSnapshotSchema.parse({
+    invites: [{
+      email: "CURATOR@example.com",
+      invitedAt: "2026-08-04T23:00:00.000Z",
+      joinedAt: "2026-08-05T00:00:00.000Z"
+    }],
     users: [{
       id: "user-1",
       email: "curator@example.com",
@@ -133,6 +159,8 @@ test("LogJam admin snapshot separates mutable locked state from immutable versio
   });
 
   assert.equal(snapshot.curations[0].locked, true);
+  assert.equal(snapshot.invites[0].email, "curator@example.com");
+  assert.ok(snapshot.invites[0].joinedAt);
   assert.equal(snapshot.curations[0].revision, 9);
   assert.equal(snapshot.curations[0].submissions[0].sourceRevision, 8);
   assert.equal(snapshot.curations[0].submissions[0].promotedAlbumStatus, "published");
@@ -218,6 +246,8 @@ test("LogJam admin keeps confirmations above review and refreshes dependent arch
   assert.ok(Number(confirmLayer[1]) > Number(baseLayer[1]));
 
   assert.match(logjamAdminSource, /adminArchiveActions\.refreshArchive/);
+  assert.match(logjamAdminSource, /No invitation email is sent/);
+  assert.match(logjamAdminSource, /Existing work was preserved/);
   assert.match(logjamAdminSource, /Retry overview/);
   assert.match(logjamAdminSource, /Retry photos/);
 });

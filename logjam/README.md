@@ -17,6 +17,7 @@ The main portfolio frontend, `archive_*` records, R2 objects, Sets and downloads
 ## Boundaries and safeguards
 
 - Worker re-verifies the Access JWT issuer and the LogJam application AUD; Access being configured at the edge is not treated as sufficient by itself.
+- A verified Access identity is authorized against `logjam_invites` in D1 on every `/auth/start*` and `/api/private*` request before a user record is created or read. Removing an email therefore revokes application access on the next request without deleting that curator's work.
 - Production fails closed. The local identity bypass requires the exact local-only tuple documented in `.dev.vars.example`; a production bypass flag returns `503`.
 - Every private query is scoped to the signed-in `logjam_users.id`. Unknown or other-user curation IDs return `404`.
 - All mutations require same-origin `Origin` and `application/json`.
@@ -27,7 +28,7 @@ The main portfolio frontend, `archive_*` records, R2 objects, Sets and downloads
 
 ## Local development
 
-Requirements: Node 20+ and a local D1 database containing the root migrations through `0006_logjam.sql`.
+Requirements: Node 20+ and a local D1 database containing the root migrations through `0007_logjam_invites.sql`.
 
 1. Install this app independently:
 
@@ -65,18 +66,20 @@ pnpm run build
 
 No deployment or account mutation is performed by this repository change. Before the first deploy:
 
-1. Apply `../migrations/0006_logjam.sql` to the existing production `yakov_archive` D1 database.
+1. Apply the pending shared migrations `../migrations/0006_logjam.sql` and `../migrations/0007_logjam_invites.sql` to the existing production `yakov_archive` D1 database.
 2. Confirm the committed shared D1 ID and choose a positive, deployment-unique rate-limit `namespace_id` in `wrangler.jsonc`.
-3. In Cloudflare Zero Trust, create an invite-only self-hosted Access application covering only these paths on `logjam.shmol.cc`:
-   - `/auth/start*`
+3. In Cloudflare Zero Trust, create one self-hosted Access application covering only these paths on `logjam.shmol.cc`:
+   - `/auth/start`
+   - `/auth/start/*`
+   - `/api/private`
    - `/api/private/*`
 
-   Keep `/` and `/api/public/*` outside Access. Use the One-time PIN identity provider and an Allow policy containing the invited email addresses. One Access application may contain both path entries and therefore one AUD; if they are separate Access applications, set `ACCESS_APP_AUD` to the two exact audience tags separated by a comma.
+   Keep `/` and `/api/public/*` outside Access. Enable One-time PIN and require it in the Allow policy. Access proves control of the email address; the Worker then performs the invite authorization from D1. One Access application may contain all four path entries and therefore one AUD; if they are separate Access applications, set `ACCESS_APP_AUD` to the exact audience tags separated by a comma.
 4. Set `ACCESS_TEAM_DOMAIN` to the account team domain and `ACCESS_APP_AUD` to the exact LogJam audience tag(s). Do not set any `LOCAL_AUTH_*` variables in production.
 5. Review the Custom Domain entry. `routes[].custom_domain=true` lets the Worker deployment provision the `logjam.shmol.cc` DNS record and certificate; `workers_dev` and preview URLs are disabled.
 6. Build, verify, then deploy from this directory with `pnpm run deploy` when explicitly ready.
 
-The Access email allow-list is the invitation mechanism. Adding Facebook or a separate auth database is unnecessary for the initial 5–10 curators; any allowed Gmail or other email address can receive a one-time PIN.
+The owner manages the D1 invitation list in `/admin/logjam`. The first version does not send invitation mail: add the address, then share `https://logjam.shmol.cc` manually. Adding Facebook or a separate auth service is unnecessary for the initial 5–10 curators; any invited Gmail or other email address can receive a one-time PIN.
 
 ## API map
 

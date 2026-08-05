@@ -9,7 +9,10 @@ import {
   readLogjamAdminOverview,
   readLogjamAdminSubmission
 } from "@/server/cloudflare/logjam-admin";
-import { validateLogjamAdminMutationRequest } from "@/server/cloudflare/logjam-admin-contract";
+import {
+  logjamAdminMutationSchema as serverLogjamAdminMutationSchema,
+  validateLogjamAdminMutationRequest
+} from "@/server/cloudflare/logjam-admin-contract";
 import { submitCuration } from "../logjam/worker/repository";
 
 const timestamp = "2026-08-05T12:00:00.000Z";
@@ -49,6 +52,80 @@ test("LogJam admin mutations require same-origin JSON", () => {
   ));
   assert.equal(plainText.ok, false);
   if (!plainText.ok) assert.equal(plainText.code, "json_required");
+});
+
+test("LogJam invitations are normalized, idempotent, revocable, and keep curator data", async () => {
+  const fixture = createFixture();
+  try {
+    assert.deepEqual(serverLogjamAdminMutationSchema.parse({
+      action: "invite-email",
+      email: " Friend@Example.COM "
+    }), {
+      action: "invite-email",
+      email: "friend@example.com"
+    });
+    assert.throws(() => serverLogjamAdminMutationSchema.parse({
+      action: "invite-email",
+      email: "friend@"
+    }));
+
+    const first = await applyLogjamAdminMutation(fixture.d1, {
+      action: "invite-email",
+      email: "friend@example.com"
+    });
+    const retry = await applyLogjamAdminMutation(fixture.d1, {
+      action: "invite-email",
+      email: "friend@example.com"
+    });
+    if (!("invitedAt" in first) || !("invitedAt" in retry)) {
+      assert.fail("Expected invitation results.");
+    }
+    assert.deepEqual(first, {
+      email: "friend@example.com",
+      invitedAt: first.invitedAt,
+      created: true
+    });
+    assert.deepEqual(retry, {
+      email: "friend@example.com",
+      invitedAt: first.invitedAt,
+      created: false
+    });
+
+    const overview = await readLogjamAdminOverview(fixture.d1);
+    const friend = overview.invites.find((invitation) => invitation.email === "friend@example.com");
+    assert.ok(friend);
+    assert.equal(friend.joinedAt, timestamp);
+    assert.deepEqual(
+      overview.invites.filter((invitation) => invitation.email.endsWith("@gmail.com"))
+        .map((invitation) => invitation.email),
+      ["jacobjshmol@gmail.com", "rubishelkay@gmail.com"]
+    );
+
+    const revoked = await applyLogjamAdminMutation(fixture.d1, {
+      action: "revoke-invite",
+      email: "friend@example.com"
+    });
+    const revokeRetry = await applyLogjamAdminMutation(fixture.d1, {
+      action: "revoke-invite",
+      email: "friend@example.com"
+    });
+    assert.deepEqual(revoked, { email: "friend@example.com", revoked: true });
+    assert.deepEqual(revokeRetry, { email: "friend@example.com", revoked: false });
+    assert.equal(
+      scalarNumber(fixture.sqlite, "SELECT COUNT(*) AS value FROM logjam_users WHERE email_normalized = ?", "friend@example.com"),
+      1
+    );
+
+    await assert.rejects(
+      applyLogjamAdminMutation(fixture.d1, {
+        action: "revoke-invite",
+        email: " JacobJShmol@GMAIL.com "
+      }),
+      (error) => error instanceof LogjamAdminError && error.code === "owner_invitation_protected"
+    );
+  } finally {
+    fixture.sqlite.close();
+  }
 });
 
 test("LogJam decisions are global per user and canonical photo", () => {
@@ -486,7 +563,8 @@ function createFixture() {
     "0003_upload_job_photo.sql",
     "0004_cloud_admin.sql",
     "0005_public_web_tiers.sql",
-    "0006_logjam.sql"
+    "0006_logjam.sql",
+    "0007_logjam_invites.sql"
   ]) {
     sqlite.exec(readFileSync(new URL(`../migrations/${migration}`, import.meta.url), "utf8"));
   }

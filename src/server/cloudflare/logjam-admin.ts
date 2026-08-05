@@ -13,6 +13,12 @@ type UserRow = {
   last_seen_at: string | null;
 };
 
+type InviteRow = {
+  email_normalized: string;
+  invited_at: string;
+  joined_at: string | null;
+};
+
 type CurationRow = {
   id: string;
   user_id: string;
@@ -69,7 +75,17 @@ type PromotedAlbumRow = {
 };
 
 export async function readLogjamAdminOverview(db: Database) {
-  const [userResult, curationResult, submissionResult] = await db.batch([
+  const [inviteResult, userResult, curationResult, submissionResult] = await db.batch([
+    db.prepare(`
+      SELECT
+        invitation.email_normalized,
+        invitation.invited_at,
+        user.created_at AS joined_at
+      FROM logjam_invites invitation
+      LEFT JOIN logjam_users user
+        ON user.email_normalized = invitation.email_normalized
+      ORDER BY invitation.email_normalized COLLATE NOCASE
+    `),
     db.prepare(`
       SELECT id, email_normalized, owner_display_name, created_at, last_seen_at
       FROM logjam_users
@@ -123,6 +139,11 @@ export async function readLogjamAdminOverview(db: Database) {
   );
 
   return {
+    invites: resultRows<InviteRow>(inviteResult).map((invite) => ({
+      email: invite.email_normalized,
+      invitedAt: invite.invited_at,
+      joinedAt: invite.joined_at
+    })),
     users: resultRows<UserRow>(userResult).map(mapUser),
     curations: resultRows<CurationRow>(curationResult).map((curation) => ({
       id: curation.id,
@@ -227,6 +248,10 @@ export async function applyLogjamAdminMutation(
   mutation: LogjamAdminMutation
 ) {
   switch (mutation.action) {
+    case "invite-email":
+      return inviteEmail(db, mutation.email);
+    case "revoke-invite":
+      return revokeInvite(db, mutation.email);
     case "rename-user":
       return renameUser(db, mutation.userId, mutation.displayName);
     case "archive-submission":
@@ -234,6 +259,50 @@ export async function applyLogjamAdminMutation(
     case "promote-submission":
       return promoteSubmission(db, mutation.submissionId, mutation.title);
   }
+}
+
+const protectedOwnerEmail = "jacobjshmol@gmail.com";
+
+async function inviteEmail(db: Database, email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const timestamp = now();
+  const result = await db.prepare(`
+    INSERT INTO logjam_invites (email_normalized, invited_at, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(email_normalized) DO NOTHING
+  `).bind(normalizedEmail, timestamp, timestamp).run();
+  const invitation = await db.prepare(`
+    SELECT email_normalized, invited_at
+    FROM logjam_invites
+    WHERE email_normalized = ?
+  `).bind(normalizedEmail).first<{ email_normalized: string; invited_at: string }>();
+  if (!invitation) {
+    throw new LogjamAdminError(
+      "invitation_create_failed",
+      "The LogJam invitation could not be created.",
+      500
+    );
+  }
+  return {
+    email: invitation.email_normalized,
+    invitedAt: invitation.invited_at,
+    created: (result.meta.changes ?? 0) === 1
+  };
+}
+
+async function revokeInvite(db: Database, email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (normalizedEmail === protectedOwnerEmail) {
+    throw new LogjamAdminError(
+      "owner_invitation_protected",
+      "The owner email must retain LogJam access.",
+      409
+    );
+  }
+  const result = await db.prepare(`
+    DELETE FROM logjam_invites WHERE email_normalized = ?
+  `).bind(normalizedEmail).run();
+  return { email: normalizedEmail, revoked: (result.meta.changes ?? 0) === 1 };
 }
 
 async function renameUser(db: Database, userId: string, displayName: string | null) {

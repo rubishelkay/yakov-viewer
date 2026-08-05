@@ -4,6 +4,7 @@ const idSchema = z.string().trim().min(1).max(200);
 const timestampSchema = z.string().trim().min(1);
 const optionalTimestampSchema = timestampSchema.nullable().optional();
 const countSchema = z.number().int().nonnegative();
+const inviteEmailSchema = z.string().trim().max(254).email().transform((email) => email.toLowerCase());
 
 export const logjamAdminUserSchema = z.object({
   id: idSchema,
@@ -11,6 +12,12 @@ export const logjamAdminUserSchema = z.object({
   displayName: z.string().trim().min(1).max(120).nullable(),
   createdAt: timestampSchema,
   lastSeenAt: optionalTimestampSchema
+});
+
+export const logjamAdminInviteSchema = z.object({
+  email: inviteEmailSchema,
+  invitedAt: timestampSchema,
+  joinedAt: timestampSchema.nullable()
 });
 
 export const logjamAdminSubmissionSchema = z.object({
@@ -41,6 +48,7 @@ export const logjamAdminCurationSchema = z.object({
 });
 
 export const logjamAdminSnapshotSchema = z.object({
+  invites: z.array(logjamAdminInviteSchema),
   users: z.array(logjamAdminUserSchema),
   curations: z.array(logjamAdminCurationSchema)
 });
@@ -69,6 +77,14 @@ export const logjamAdminSubmissionDetailSchema = z.object({
 
 export const logjamAdminMutationSchema = z.discriminatedUnion("action", [
   z.object({
+    action: z.literal("invite-email"),
+    email: inviteEmailSchema
+  }),
+  z.object({
+    action: z.literal("revoke-invite"),
+    email: inviteEmailSchema
+  }),
+  z.object({
     action: z.literal("rename-user"),
     userId: idSchema,
     displayName: z.string().trim().min(1).max(120).nullable()
@@ -85,6 +101,7 @@ export const logjamAdminMutationSchema = z.discriminatedUnion("action", [
 ]);
 
 export type LogjamAdminSnapshot = z.infer<typeof logjamAdminSnapshotSchema>;
+export type LogjamAdminInvite = z.infer<typeof logjamAdminInviteSchema>;
 export type LogjamAdminUser = z.infer<typeof logjamAdminUserSchema>;
 export type LogjamAdminCuration = z.infer<typeof logjamAdminCurationSchema>;
 export type LogjamAdminSubmission = z.infer<typeof logjamAdminSubmissionSchema>;
