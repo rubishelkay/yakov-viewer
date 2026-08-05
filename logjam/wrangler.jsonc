@@ -47,6 +47,6 @@
     "RUNTIME_ENV": "production",
     "ACCESS_ENABLED": "true",
     "ACCESS_TEAM_DOMAIN": "https://calm-math-532f.cloudflareaccess.com",
-    "ACCESS_APP_AUD": "REPLACE_WITH_LOGJAM_ACCESS_AUD"
+    "ACCESS_APP_AUD": "2a1d0aa0eb0d824eff233d9d5f204640bfa75747c4573a5c955f3e683e4c1334"
   }
 }

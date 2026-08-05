@@ -37,7 +37,7 @@ Requirements: Node 20+ and a local D1 database containing the root migrations th
    pnpm install
    ```
 
-2. Copy `.dev.vars.example` to the ignored `.dev.vars`; keep the explicit local bypass values for local work. The shared, non-secret D1 ID and Access team domain are already committed in `wrangler.jsonc`; the LogJam-specific Access AUD remains a deployment placeholder.
+2. Copy `.dev.vars.example` to the ignored `.dev.vars`; keep the explicit local bypass values for local work. The shared, non-secret D1 ID, Access team domain, and LogJam Access AUD are committed in `wrangler.jsonc`.
 
 3. Apply the shared root migrations to local D1 using Wrangler and this config:
 
@@ -64,7 +64,15 @@ pnpm run build
 
 ## One-time Cloudflare setup
 
-No deployment or account mutation is performed by this repository change. Before the first deploy:
+Production checkpoint on 2026-08-05:
+
+- Cloudflare One-time PIN is enabled.
+- The self-hosted Access application `Yakov LogJam` protects only `/auth/start`, `/auth/start/*`, `/api/private`, and `/api/private/*` on `logjam.shmol.cc`.
+- Its 24-hour Allow policy accepts only One-time PIN, and the exact application AUD is committed in `wrangler.jsonc` for Worker-side JWT validation.
+- The public `/` and `/api/public/*` routes remain outside Access.
+- Production D1 migrations, the `yakov-logjam` Worker/custom domain, and GitHub-triggered Workers Builds are still pending.
+
+Before the first deploy:
 
 1. Apply the pending shared migrations `../migrations/0006_logjam.sql` and `../migrations/0007_logjam_invites.sql` to the existing production `yakov_archive` D1 database.
 2. Confirm the committed shared D1 ID and choose a positive, deployment-unique rate-limit `namespace_id` in `wrangler.jsonc`.

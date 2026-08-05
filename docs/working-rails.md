@@ -118,9 +118,11 @@ locks permanently after that Album has ever been published. Database triggers,
 request-size guards, mutation rate limits, and per-user/per-curation caps enforce the
 first small-cohort operating envelope.
 
-No production LogJam migration, Access application, domain, Worker deployment, GitHub
-push, or build integration is implied by the local implementation. Those external
-changes require a separate exact brief and owner confirmation.
+The `codex/logjam` branch is pushed to GitHub. On 2026-08-05 the owner confirmed and
+created the production `Yakov LogJam` Access application with One-time PIN, four
+private-path destinations, a 24-hour policy, and Worker-side AUD validation. Production
+D1 migrations, the `yakov-logjam` Worker/custom domain, and GitHub-triggered Workers
+Builds remain pending and still require an exact deployment brief and confirmation.
 
 ## Done Means
 
