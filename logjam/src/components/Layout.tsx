@@ -1,14 +1,18 @@
 import { Link } from "../router";
 import { useDecisions } from "../state/Decisions";
+import { ThemeToggle } from "./ThemeToggle";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { error, clearError } = useDecisions();
   return (
     <div className="app-shell">
       <header className="site-header">
-        <Link className="site-wordmark" to="/" aria-label="LogJam album library">
-          LogJam
-        </Link>
+        <div className="site-brand">
+          <Link className="site-wordmark" to="/" aria-label="LogJam album library">
+            LogJam
+          </Link>
+          <ThemeToggle />
+        </div>
         <Link className="account-link" to="/account">
           My edit
         </Link>

@@ -80,7 +80,7 @@ export function AlbumFeedPage({ slug }: { slug: string }) {
           <header className="album-feed__header page-width">
             <p className="eyebrow">Album {albumIndex + 1}</p>
             <h1 id={`album-${album.id}`}>{album.title}</h1>
-            <p>{album.subtitle || `${album.photoCount} photographs`}</p>
+            {album.subtitle && <p>{album.subtitle}</p>}
           </header>
           <div className="photo-column">
             {album.photos.map((photo, photoIndex) => (

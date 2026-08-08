@@ -49,7 +49,7 @@ export function CatalogPage() {
               </div>
               <div className="album-card__copy">
                 <h2>{album.title}</h2>
-                <p>{album.subtitle || `${album.photoCount} photographs`}</p>
+                {album.subtitle && <p>{album.subtitle}</p>}
                 <span>{album.photoCount} frames</span>
               </div>
             </Link>
