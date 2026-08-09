@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 type ConfirmTone = "danger" | "neutral";
 
@@ -41,36 +42,39 @@ export function useAdminConfirmDialog() {
     });
   }, []);
 
-  const dialog = activeConfirm ? (
-    <div className="admin-modal-backdrop" role="presentation">
-      <div
-        aria-describedby="admin-confirm-message"
-        aria-labelledby="admin-confirm-title"
-        aria-modal="true"
-        className="admin-confirm-dialog"
-        data-tone={activeConfirm.tone}
-        role="dialog"
-      >
-        <div>
-          <p className="admin-kicker">Confirm action</p>
-          <h2 id="admin-confirm-title">{activeConfirm.title}</h2>
-          <p id="admin-confirm-message">{activeConfirm.message}</p>
-        </div>
-        <div className="admin-row-actions">
-          <button className="admin-ghost-button" onClick={() => close(false)} type="button">
-            {activeConfirm.cancelLabel}
-          </button>
-          <button
-            className={activeConfirm.tone === "danger" ? "admin-danger-button" : "admin-button"}
-            onClick={() => close(true)}
-            type="button"
+  const dialog = activeConfirm && typeof document !== "undefined"
+    ? createPortal(
+        <div className="admin-modal-backdrop admin-modal-backdrop--confirm" role="presentation">
+          <div
+            aria-describedby="admin-confirm-message"
+            aria-labelledby="admin-confirm-title"
+            aria-modal="true"
+            className="admin-confirm-dialog"
+            data-tone={activeConfirm.tone}
+            role="dialog"
           >
-            {activeConfirm.confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  ) : null;
+            <div>
+              <p className="admin-kicker">Confirm action</p>
+              <h2 id="admin-confirm-title">{activeConfirm.title}</h2>
+              <p id="admin-confirm-message">{activeConfirm.message}</p>
+            </div>
+            <div className="admin-row-actions">
+              <button className="admin-ghost-button" onClick={() => close(false)} type="button">
+                {activeConfirm.cancelLabel}
+              </button>
+              <button
+                className={activeConfirm.tone === "danger" ? "admin-danger-button" : "admin-button"}
+                onClick={() => close(true)}
+                type="button"
+              >
+                {activeConfirm.confirmLabel}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )
+    : null;
 
   return { confirm, dialog };
 }

@@ -22,10 +22,17 @@ Next.js + OpenNext Worker
   admin/public route handlers
 
 Cloudflare Access
-  exact owner email
+  exact owner email for /admin
+  verified email OTP for LogJam writes
+
+Separate LogJam Worker
+  public published-album catalog
+  /auth/start* and /api/private/* protected by Access
+  global keep/pass decisions and mixed-photo curations
 
 D1 yakov_archive
-  source of truth for sets, albums, memberships, photos, tags, settings, Bin
+  source of truth for sets, albums, memberships, photos, tags, settings, Bin,
+  and the LogJam invitation allow-list
 
 R2 yakov-public-assets
   thumb, display, expanded
@@ -93,8 +100,42 @@ friction. Likely later milestones:
 - private Google Drive `master` references;
 - automatic/queued image processing;
 - multi-tag archive search;
-- collections and Logjamming;
+- collections;
 - GitHub-triggered Cloudflare production builds.
+
+## LogJam Local Checkpoint
+
+The curator product is implemented as a separate `logjam/` Worker and SPA in this
+repository. It reads only published canonical albums/photos from the shared D1 and
+never copies media. Public browsing is anonymous; the first write is replayed after a
+Cloudflare Access email-OTP login and a D1 invitation check. The owner manages invites
+in `/admin/logjam` and shares the link manually. Decisions are global per user/photo,
+and private curations can combine photos from any source album.
+
+Catalog cards omit descriptions and tags: the first row is title plus frame count, and
+the second is `kept`, `passed`, and `Sorted`. A fully sorted card is noninteractive, and
+the continuous feed skips the completed album together with its heading. Global desktop
+shortcuts use `ArrowLeft` for pass, `ArrowRight` for keep, and `Z` or `Cmd-Z` for undo.
+Undo is protected and user-scoped; decision removal and reconciliation of affected active
+curations happen atomically so concurrent state cannot leave them inconsistent.
+
+Submit seals immutable, ordered versions. `/admin/logjam` lets the owner review a
+version and atomically promote it into one canonical draft Album. The source curation
+locks permanently after that Album has ever been published. Database triggers,
+request-size guards, mutation rate limits, and per-user/per-curation caps enforce the
+first small-cohort operating envelope.
+
+The `codex/logjam` branch is pushed to GitHub. On 2026-08-05 the owner confirmed and
+created the production `Yakov LogJam` Access application with One-time PIN, four
+private-path destinations, a 24-hour policy, and Worker-side AUD validation. Cloudflare
+Workers Builds is connected to that branch with `/logjam` as the root, `pnpm check` as
+the build gate, and a deploy command that applies the shared D1 migrations before
+deploying `yakov-logjam`; non-production builds are disabled. Cloudflare's initial
+automatic probe of the default `main` branch stopped before execution because that
+branch has no `/logjam` directory, so production D1 was unchanged. The existing
+`yakov-viewer` Worker is also connected to `codex/logjam`: its build gate runs the full
+root `pnpm check` followed by the OpenNext packaging step, and only then runs the
+OpenNext production deploy. Preview-branch builds are disabled for both Workers.
 
 ## Done Means
 

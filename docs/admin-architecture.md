@@ -49,6 +49,8 @@ remaining memberships.
 - Albums: create, metadata, download policy, Sets, tags, covers, upload, order, status,
   Bin.
 - Photos: global canonical library and multi-album memberships.
+- LogJam: curator identities, mutable private curations, immutable submitted versions,
+  ordered photo review, and owner-only promotion into canonical draft albums.
 - Sets: create, publish, order, and album membership.
 - Tags: controlled dictionary, usage, edit, safe delete.
 - Settings: active publication/download/Bin defaults and storage contract.
@@ -69,6 +71,30 @@ create draft Album
 ```
 
 The album may remain outside Sets and still appear in `/albums`.
+
+## LogJam Curator Review
+
+LogJam writes only to its own curator, curation, decision, and submission records. A
+working curation is private and mutable. Each submit action freezes an immutable,
+versioned photo order that the owner reviews in `/admin/logjam` before promotion.
+
+The owner workflow is:
+
+```txt
+open curator
+  -> distinguish current working curation from submitted versions
+  -> open one immutable submission and inspect its ordered thumbnails
+  -> resolve any unavailable canonical photos
+  -> optionally override the album title
+  -> promote once into a canonical draft Album + AlbumPhoto memberships
+```
+
+Promotion reuses existing Photo and Asset records; it does not copy R2 objects. The
+promoted album stays draft until the owner deliberately publishes it in Albums. A
+submission links back to its canonical album and cannot create duplicate albums on a
+retry. Once that canonical album has ever been published, the source curation is
+visibly and permanently locked even if the album is later unpublished. Unpromoted
+submissions may be archived, but their immutable rows and photo order remain auditable.
 
 ## Delete Semantics
 

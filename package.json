@@ -12,12 +12,14 @@
     "validate:content": "node --import tsx scripts/validate-content.ts",
     "test:admin-auth": "node --conditions=react-server --import tsx --test tests/admin-auth.test.ts",
     "test:admin-ux": "node --import tsx --test tests/admin-ux-contract.test.ts",
+    "test:logjam-admin": "node --conditions=react-server --import tsx --test tests/logjam-admin.test.ts",
     "test:image-pipeline": "node --import tsx --test tests/jpeg-metadata.test.ts",
     "test:public-cache": "node --import tsx --test tests/public-cache.test.ts",
+    "check:logjam": "pnpm --dir logjam check",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --max-warnings=0",
     "build": "next build",
-    "check": "pnpm validate:content && pnpm typecheck && pnpm test:admin-auth && pnpm test:admin-ux && pnpm test:image-pipeline && pnpm test:public-cache && pnpm lint && pnpm build"
+    "check": "pnpm validate:content && pnpm typecheck && pnpm test:admin-auth && pnpm test:admin-ux && pnpm test:logjam-admin && pnpm test:image-pipeline && pnpm test:public-cache && pnpm lint && pnpm build"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.20.1",

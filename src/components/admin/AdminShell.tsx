@@ -10,6 +10,7 @@ import {
   ImagePlus,
   Images,
   Layers3,
+  ListChecks,
   Settings,
   Tags
 } from "lucide-react";
@@ -21,6 +22,7 @@ const navItems = [
   { href: "/admin/sets", label: "Sets", icon: Layers3 },
   { href: "/admin/albums", label: "Albums", icon: ImagePlus },
   { href: "/admin/photos", label: "Photos", icon: Images },
+  { href: "/admin/logjam", label: "LogJam", icon: ListChecks },
   { href: "/admin/tags", label: "Tags", icon: Tags },
   { href: "/admin/settings", label: "Settings", icon: Settings },
   { href: "/admin/bin", label: "Bin", icon: CircleX }
