@@ -112,6 +112,13 @@ Cloudflare Access email-OTP login and a D1 invitation check. The owner manages i
 in `/admin/logjam` and shares the link manually. Decisions are global per user/photo,
 and private curations can combine photos from any source album.
 
+Catalog cards omit descriptions and tags: the first row is title plus frame count, and
+the second is `kept`, `passed`, and `Sorted`. A fully sorted card is noninteractive, and
+the continuous feed skips the completed album together with its heading. Global desktop
+shortcuts use `ArrowLeft` for pass, `ArrowRight` for keep, and `Z` or `Cmd-Z` for undo.
+Undo is protected and user-scoped; decision removal and reconciliation of affected active
+curations happen atomically so concurrent state cannot leave them inconsistent.
+
 Submit seals immutable, ordered versions. `/admin/logjam` lets the owner review a
 version and atomically promote it into one canonical draft Album. The source curation
 locks permanently after that Album has ever been published. Database triggers,

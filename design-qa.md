@@ -1,74 +1,83 @@
-# Design QA — LogJam frontend iteration
+# Design QA — LogJam compact catalog, continuous feed, and undo iteration
 
-Date: 2026-08-08
+Date: 2026-08-09
 
 ## Source truth
 
-- Catalog annotation: `/var/folders/p6/s6yxnvt551d__p3300w925040000gn/T/TemporaryItems/NSIRD_screencaptureui_lp25Ml/Screenshot 2026-08-08 at 13.58.52.png`
-- Album-feed annotation: `/var/folders/p6/s6yxnvt551d__p3300w925040000gn/T/TemporaryItems/NSIRD_screencaptureui_WClOjH/Screenshot 2026-08-08 at 13.58.59.png`
-- Verbal contract: pure white/black themes, system default on first visit, one two-state icon beside the wordmark, one photo count, smaller album title, natural-aspect photos without letterboxing or visible titles, compact centered Pass/Keep links, and animated removal after every decision.
+- Previous My Edit annotation: `/Users/jacobshmol/Desktop/Screenshot 2026-08-09 at 01.20.37.png`
+- Previous catalog annotation: `/var/folders/p6/s6yxnvt551d__p3300w925040000gn/T/TemporaryItems/NSIRD_screencaptureui_bkvhdC/Screenshot 2026-08-09 at 01.22.00.png`
+- Current verbal contract: catalog cards have no descriptions or tags; row one contains album title and frame count, row two contains kept/passed progress and `Sorted`; a completed album is noninteractive and omitted with its heading from the continuous sorting feed; `ArrowLeft` passes, `ArrowRight` keeps, and `Z` or `Cmd-Z` safely undoes the latest in-session decision.
+- Existing LogJam typography, pure black/white theme tokens, responsive grids, stationary theme toggle, source-album captions, and protected-account flow remain the design-system source.
 
 ## Implementation evidence
 
-| State | Viewport / density | Local artifact |
-| --- | --- | --- |
-| Catalog, light, focused | 1096 × 664 / 1x | `/tmp/logjam-catalog-final-light-1096x664.png` |
-| Catalog, light, full page | 1096 × 1671 / 1x | `/tmp/logjam-catalog-full-light-1096.png` |
-| Catalog, dark | 1096 × 664 / 1x | `/tmp/logjam-catalog-dark-1096x664.png` |
-| Album photo, light, focused | 985 × 712 / 1x | `/tmp/logjam-album-light-985x712.png` |
-| Catalog, mobile | 390 × 844 / 1x | `/tmp/logjam-catalog-mobile-390x844.png` |
-| Album feed, mobile | 390 × 844 / 1x | `/tmp/logjam-album-mobile-390x844.png` |
-| Keep transition | 985 × 712 / 1x | `/tmp/logjam-keep-animation-985x712.png` |
+The following states were captured and inspected in the in-app browser at 1x density:
 
-The in-app browser's full-page capture scales the page content differently from its viewport capture. Pixel comparison therefore used the focused screenshots at the exact reference sizes; the full-page artifact was used only for structural coverage. DOM measurements and responsive screenshots were used for layout assertions.
+| State | Viewport |
+| --- | --- |
+| Compact catalog, dark, one completed album | 1180 × 754 |
+| Continuous feed entered through a completed album | 1180 × 754 |
+| Compact catalog, one-column mobile | 390 × 844 |
+| Compact catalog, supported minimum width | 320 × 700 |
+| Continuous feed, mobile | 390 × 844 |
+| My Edit, dark, status menu open from the previous iteration | 1134 × 652 |
 
-## Comparison loops
+Local QA uses the nine-album seed and `Local curator`; differences from the annotations in album titles, photographs, identity, and counts are expected content variance.
 
-1. Captured both annotated screenshots at original resolution and inspected the existing LogJam components and styles.
-2. Implemented the requested theme, catalog, photo-frame, action, swipe, and collapse changes.
-3. Compared each source screenshot beside its same-size implementation screenshot in one visual inspection. The requested deletions are absent: no beige page surface, duplicate synthesized count, black media box, visible photo title, or large colored decision buttons.
-4. Checked desktop light/dark and mobile light/dark. The catalog resolves to three columns at 1096 px, one column at 390 px, and has no horizontal overflow.
-5. Rebuilt after the CSP-safe external theme initializer and ran a clean browser tab. No current console errors or warnings remained.
+## Visual comparison
 
-The photographs and album names differ between the supplied screenshots and local QA because the local preview uses the committed nine-album seed. This is expected content variance, not a visual regression.
+- At 1180 × 754 the catalog remains a three-column grid. Document width and `scrollWidth` are both exactly 1180 px.
+- Album subtitles and tags are absent. The first completed card reads as two compact rows: `boring film #57` plus `36 frames`, then `18 kept · 18 passed` plus `Sorted`.
+- The completed card is an `ARTICLE`, not a link; the count of `a.album-card--complete` is zero. Its cover remains 50% opaque while title and progress retain full contrast.
+- At 390 px, the grid is 362 px wide and document width equals `scrollWidth` at 390 px. The `Sorted` label bounds are `x=321.82…376`.
+- At 320 px, the grid is 292 px wide and document width equals `scrollWidth` at 320 px. The `Sorted` label bounds are `x=251.82…306`.
+- The mobile continuous feed at 390 px has no horizontal overflow, and its desktop keyboard-shortcut hint is hidden.
+- The theme icon retains its 32 × 32 px geometry with computed transform `none`; hover changes only its color to gray.
+- My Edit continues to show source-album captions rather than raw photo filenames, and its status menu remains usable by pointer, touch, and keyboard.
 
-## Measured visual checks
+## Feed and keyboard interaction checks
 
-- Light page background: `rgb(255, 255, 255)`.
-- Dark page background: `rgb(0, 0, 0)`.
-- Catalog album title: 20 px at 1096 px viewport; only subtitle plus one `frames` count render.
-- Album image rendered ratio matched its intrinsic ratio within rounding (`1.4948` vs `1.4944`).
-- Album gesture surface is transparent; visible photo-title element is absent.
-- Pass and Keep are centered, borderless text controls.
-- Mobile document width equals viewport width: 390 px.
+- Direct navigation to `/albums/boring-film-57` skips fully sorted `boring film #57`, including its heading, and displays only the next `boring film #59` heading with 35 remaining cards.
+- Real Computer Use keyboard input confirmed that modified `Shift+Right` is ignored (`35 → 35`).
+- `ArrowRight` kept the active frame and removed it from the feed (`35 → 34`); plain `Z` restored it (`34 → 35`).
+- `ArrowLeft` passed the active frame (`35 → 34`); `Cmd-Z` restored it (`34 → 35`).
+- After undo, focus returned to the restored `photo-boring-film-59-002` card.
+- Undo history is session-local: after one action changed `35 → 34`, navigating away and back left `Z` at 34 rather than undoing an action from the previous feed session.
+- The exact local QA decision was then deleted explicitly and the feed returned to its original 35-card state.
+- Worker logs showed the decision `PUT` followed by `POST /undo`, both with HTTP 200.
+- Browser warning and error logs were empty after desktop, mobile, keyboard, navigation, and undo checks.
 
-## Interaction and persistence checks
+## Preserved account and accessibility checks
 
-- First Pass exercised the local auth replay path: visible cards `36 → 35`; the decided image disappeared.
-- Direct Keep: `35 → 34`; the card moved right, collapsed, and the next card rose.
-- Actual right swipe: `34 → 33`.
-- Actual left swipe: `33 → 32`.
-- Vertical drag: `32 → 32`; no accidental decision.
-- My Edit checkpoint: `Kept 2`, `Passed 2`; both grids showed two photos.
-- Reload preserved the My Edit counts; revisiting the album kept all four decided photos absent.
-- Sequential keyboard sorting after focus handoff: `31 → 30 → 29`; focus remained on the next `.photo-card__gesture` after both decisions.
-- Theme toggle changed the document and accessible label in both directions; explicit choice survived reload. Pure system-default resolution is also covered by unit tests.
-- Final clean browser tab: zero current console errors or warnings.
+- Opening the My Edit status menu moves keyboard focus to its menu item without changing `scrollY`; Escape closes it and returns focus to `Change status`.
+- The status menu supports pointer changes in both directions and keeps the source-album caption correct after server refreshes.
+- Its semantics include `aria-haspopup`, `aria-expanded`, `role=menu`, `role=menuitem`, live announcements, `aria-busy`, focus entry, Escape return, outside-close, and adjacent focus handoff after removal.
+- Public cached `/api/public/albums` remains anonymous and unpersonalized. Per-user progress is returned only by the protected, `no-store` private endpoint after the authenticated hint.
+- Progress, account data, decisions, and undo stay scoped to the exact Access-authenticated, invited user; published-only reads, parameterized SQL, invitation checks, CSRF validation, CSP, security headers, and rate limits remain intact.
+- Conditional undo is versioned, user-scoped, and atomic. A stale competing decision fails with HTTP 409 instead of removing newer state or leaving an active curation inconsistent.
+- Archived and source-locked snapshots retain immutable membership during decision reconciliation.
+- Production Cloudflare data was not used or modified; all interaction state was confined to local D1.
 
-## Security and repository checks
+## Automated verification
 
-- Theme initialization is a same-origin external script, compatible with the unchanged `script-src 'self'` CSP; no `unsafe-inline` script exception was added.
-- Final local response retained CSP, frame denial, permissions policy, no-sniff, referrer policy, and `noindex` headers.
-- Backend, D1 schema, Access validation, rate limits, and production data were not changed.
-- `pnpm check`: passed, 34 tests.
+- LogJam `pnpm check`: 11 test files, 53 tests, TypeScript, and production Vite build passed.
+- Root content validation, TypeScript, lint, and all test suites passed.
+- Root `pnpm test:logjam-admin`: 15 D1/admin tests passed.
+- The root Next.js production build passed outside the sandbox; the sandbox-only failure was the known loopback `EPERM` restriction.
 - `git diff --check`: passed.
+- Independent latest-diff reviews found no open P0/P1/P2 findings.
 
 ## Findings history
 
-- P1 — decided card remained in the feed: fixed with save-aware exit and collapse states.
-- P1 — keyboard focus was lost after dismissal: fixed with next-card focus handoff and a persistent live region.
-- P1 — inline pre-paint theme script conflicted with the strict CSP: fixed by moving it to `/theme-init.js` without weakening headers.
-- P2 — mobile flex gap would have caused a final jump after removal: fixed by moving spacing inside the collapsing card.
+- P2 — authenticated cards could briefly remain links before private progress arrived: fixed with fail-closed loading/error articles, an explicit retry notice, and anonymous fallback only after an authentication failure.
+- P2 — two rapid My Edit status changes could race the provider's mutation lock: fixed with an immediate page-level ref guard and disabled status actions until save and refresh finish.
+- P2 — the mobile catalog initially widened a 390 px document to 486 px: fixed with shrink-safe `min-width` and `minmax(0, 1fr)` layout rules; both 390 px and 320 px now have exact viewport-width scroll geometry.
+- P2 — the whole completed link was initially dimmed, reducing text contrast: fixed by applying 50% opacity to the cover only, keeping metadata opaque, and rendering the completed card as a noninteractive article.
+- P2 — the ARIA status menu initially left focus on its trigger: fixed with focus entry using `preventScroll` and Escape return.
+- P2 — the 154 px status popup clipped at 320 px: fixed with a bounded narrow-layout width and right offset.
+- P2 — raw photo title remained in image alternative text: removed in favor of source-album wording.
+- P2 — a shared canonical photo could be mislabeled with only its first album: fixed by returning all published source-album titles in deterministic order.
+- P2 — Keep → Pass or undo could leave editable curation counts inconsistent: fixed with versioned atomic reconciliation while preserving immutable memberships.
 - P0/P1/P2 open findings: none.
 
 final result: passed

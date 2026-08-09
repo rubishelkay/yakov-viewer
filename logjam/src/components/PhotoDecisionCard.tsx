@@ -1,12 +1,15 @@
-import { useCallback, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 
 import type { DecisionValue, PublicPhoto } from "../../shared/contracts";
 import { useHorizontalDecision } from "../hooks/useHorizontalDecision";
+import { decisionFromArrowShortcut } from "../lib/feed";
 
 type Props = {
   photo: PublicPhoto;
   decision?: DecisionValue;
   onDecision(decision: DecisionValue): Promise<void>;
+  onActivityChange?(photoId: string, active: boolean): void;
+  disabled?: boolean;
   eager?: boolean;
 };
 
@@ -18,16 +21,32 @@ function waitForExitAnimation(): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, EXIT_ANIMATION_MS));
 }
 
-export function PhotoDecisionCard({ photo, decision, onDecision, eager = false }: Props) {
+export function PhotoDecisionCard({
+  photo,
+  decision,
+  onDecision,
+  onActivityChange,
+  disabled = false,
+  eager = false
+}: Props) {
   const busy = useRef(false);
   const card = useRef<HTMLElement | null>(null);
   const [saving, setSaving] = useState(false);
   const [phase, setPhase] = useState<CardPhase>("idle");
   const [exitDirection, setExitDirection] = useState<DecisionValue | null>(null);
   const [announcement, setAnnouncement] = useState("");
+
+  useEffect(() => {
+    if (decision !== undefined || busy.current || phase === "idle") return;
+    setExitDirection(null);
+    setSaving(false);
+    setPhase("idle");
+  }, [decision, phase]);
+
   const commit = useCallback((next: DecisionValue, advanceKeyboardFocus = false) => {
-    if (busy.current) return;
+    if (busy.current || disabled) return;
     busy.current = true;
+    onActivityChange?.(photo.id, true);
     setSaving(true);
     setPhase("exiting");
     setExitDirection(next);
@@ -46,8 +65,9 @@ export function PhotoDecisionCard({ photo, decision, onDecision, eager = false }
     }).finally(() => {
       busy.current = false;
       setSaving(false);
+      onActivityChange?.(photo.id, false);
     });
-  }, [onDecision, photo.title]);
+  }, [disabled, onActivityChange, onDecision, photo.id, photo.title]);
   const swipe = useHorizontalDecision(commit);
   const tilt = Math.max(-2.2, Math.min(2.2, swipe.drag.offset / 80));
 
@@ -66,6 +86,8 @@ export function PhotoDecisionCard({ photo, decision, onDecision, eager = false }
         <article
           ref={card}
           className={cardClassName}
+          data-photo-id={photo.id}
+          data-phase={phase}
           aria-busy={saving || undefined}
           style={{ "--photo-max-width": `${88 * photo.width / Math.max(1, photo.height)}vh` } as CSSProperties}
         >
@@ -77,17 +99,15 @@ export function PhotoDecisionCard({ photo, decision, onDecision, eager = false }
                   {...swipe.bind}
                   tabIndex={phase === "exiting" ? -1 : 0}
                   role="group"
-                  aria-disabled={saving || undefined}
+                  aria-disabled={saving || disabled || undefined}
+                  aria-keyshortcuts="ArrowLeft ArrowRight"
                   aria-label={`${photo.title || "Photograph"}. Swipe left to pass or right to keep.`}
                   onKeyDown={(event) => {
-                    if (event.key === "ArrowLeft") {
-                      event.preventDefault();
-                      commit("pass", true);
-                    }
-                    if (event.key === "ArrowRight") {
-                      event.preventDefault();
-                      commit("keep", true);
-                    }
+                    if (event.repeat) return;
+                    const next = decisionFromArrowShortcut(event);
+                    if (!next) return;
+                    event.preventDefault();
+                    commit(next, true);
                   }}
                   style={{
                     "--drag-offset": `${swipe.drag.offset}px`,
@@ -122,14 +142,16 @@ export function PhotoDecisionCard({ photo, decision, onDecision, eager = false }
                   <div className="decision-controls" aria-label="Photo decision">
                     <button
                       type="button"
-                      disabled={saving}
+                      data-decision="pass"
+                      disabled={saving || disabled}
                       onClick={(event) => commit("pass", event.detail === 0)}
                     >
                       <span aria-hidden="true">←</span> Pass
                     </button>
                     <button
                       type="button"
-                      disabled={saving}
+                      data-decision="keep"
+                      disabled={saving || disabled}
                       onClick={(event) => commit("keep", event.detail === 0)}
                     >
                       Keep <span aria-hidden="true">→</span>

@@ -10,12 +10,15 @@ import { errorResponse, HttpError, json, methodNotAllowed, readJsonObject } from
 import {
   archiveCuration,
   createCuration,
+  deleteDecision,
+  listAlbumDecisionProgress,
   listPublicAlbums,
   putDecision,
   readAccount,
   readCuration,
   readPublicAlbum,
   submitCuration,
+  undoDecision,
   updateCuration
 } from "./repository";
 
@@ -86,13 +89,43 @@ async function handlePrivate(
     return json(await readAccount(env.DB, user));
   }
 
+  if (url.pathname === "/api/private/album-progress" || url.pathname === "/api/private/album-progress/") {
+    if (request.method !== "GET") methodNotAllowed(["GET"]);
+    return json({ progress: await listAlbumDecisionProgress(env.DB, user.id) });
+  }
+
+  const decisionUndoMatch = url.pathname.match(/^\/api\/private\/decisions\/([^/]+)\/undo\/?$/);
+  if (decisionUndoMatch) {
+    if (request.method !== "POST") methodNotAllowed(["POST"]);
+    const body = await readJsonObject(request);
+    if (typeof body.expectedUpdatedAt !== "string" || body.expectedUpdatedAt.length < 1 || body.expectedUpdatedAt.length > 128) {
+      throw new HttpError(400, "invalid_decision_version", "A valid expectedUpdatedAt value is required.");
+    }
+    if (body.previousDecision !== null && !isDecision(body.previousDecision)) {
+      throw new HttpError(400, "invalid_previous_decision", "Previous decision must be keep, pass, or null.");
+    }
+    const decision = await undoDecision(
+      env.DB,
+      user.id,
+      decodeSegment(decisionUndoMatch[1]),
+      body.expectedUpdatedAt,
+      body.previousDecision
+    );
+    return json({ decision });
+  }
+
   const decisionMatch = url.pathname.match(/^\/api\/private\/decisions\/([^/]+)\/?$/);
   if (decisionMatch) {
-    if (request.method !== "PUT") methodNotAllowed(["PUT"]);
-    const body = await readJsonObject(request);
-    if (!isDecision(body.decision)) throw new HttpError(400, "invalid_decision", "Decision must be keep or pass.");
     const photoId = decodeSegment(decisionMatch[1]);
-    return json({ decision: await putDecision(env.DB, user.id, photoId, body.decision) });
+    if (request.method === "PUT") {
+      const body = await readJsonObject(request);
+      if (!isDecision(body.decision)) throw new HttpError(400, "invalid_decision", "Decision must be keep or pass.");
+      return json({ decision: await putDecision(env.DB, user.id, photoId, body.decision) });
+    }
+    if (request.method === "DELETE") {
+      return json({ decision: await deleteDecision(env.DB, user.id, photoId) });
+    }
+    methodNotAllowed(["PUT", "DELETE"]);
   }
 
   if (url.pathname === "/api/private/curations" || url.pathname === "/api/private/curations/") {
@@ -177,8 +210,10 @@ export async function enforcePrivateRequestRate(
 ) {
   if (request.method === "GET" || request.method === "HEAD") return;
   if (
-    request.method === "PUT" &&
-    /^\/api\/private\/decisions\/[^/]+\/?$/.test(url.pathname)
+    ((request.method === "PUT" || request.method === "DELETE") &&
+      /^\/api\/private\/decisions\/[^/]+\/?$/.test(url.pathname)) ||
+    (request.method === "POST" &&
+      /^\/api\/private\/decisions\/[^/]+\/undo\/?$/.test(url.pathname))
   ) {
     const rate = await env.DECISION_RATE_LIMITER.limit({
       key: `${verifiedIdentityKey}:decision`

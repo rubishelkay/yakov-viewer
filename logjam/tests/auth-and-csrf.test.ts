@@ -48,6 +48,45 @@ function invitationDb(
   } as unknown as D1Database;
 }
 
+function decisionRouteDb(deleted: boolean): D1Database {
+  const statement = (sql: string, values: unknown[] = []) => ({
+    bind: (...nextValues: unknown[]) => statement(sql, nextValues),
+    async first() {
+      if (sql.includes("FROM logjam_invites")) {
+        return { email_normalized: "friend@example.test" };
+      }
+      throw new Error(`Unexpected first query: ${sql}`);
+    },
+    async all() {
+      if (sql.includes("FROM logjam_users")) {
+        return {
+          success: true,
+          results: [{
+            id: "user-1",
+            access_sub: "local-user",
+            email_normalized: "friend@example.test",
+            owner_display_name: null,
+            last_seen_at: new Date().toISOString()
+          }],
+          meta: { changes: 0 }
+        };
+      }
+      throw new Error(`Unexpected all query: ${sql} (${values.length} values)`);
+    }
+  });
+  return {
+    prepare: (sql: string) => statement(sql),
+    async batch() {
+      const result = (changes: number) => ({
+        success: true,
+        results: [],
+        meta: { changes }
+      });
+      return [result(0), result(0), result(deleted ? 1 : 0)];
+    }
+  } as unknown as D1Database;
+}
+
 describe("Access configuration", () => {
   it("allows only the explicit local bypass tuple", async () => {
     const identity = await requireAccessIdentity(new Request("http://localhost/auth/start"), env({
@@ -157,6 +196,10 @@ describe("private mutation CSRF guard", () => {
       headers: { Origin: "https://logjam.shmol.cc", "Content-Type": "application/json" },
       body: "{}"
     }))).not.toThrow();
+    expect(() => enforcePrivateMutation(new Request("https://logjam.shmol.cc/api/private/decisions/photo-1", {
+      method: "DELETE",
+      headers: { Origin: "https://logjam.shmol.cc", "Content-Type": "application/json" }
+    }))).not.toThrow();
   });
 
   it("rejects cross-origin and non-JSON mutations", () => {
@@ -169,6 +212,10 @@ describe("private mutation CSRF guard", () => {
       method: "POST",
       headers: { Origin: "https://logjam.shmol.cc", "Content-Type": "text/plain" },
       body: "{}"
+    }))).toThrowError(HttpError);
+    expect(() => enforcePrivateMutation(new Request("https://logjam.shmol.cc/api/private/decisions/photo-1", {
+      method: "DELETE",
+      headers: { Origin: "https://evil.test", "Content-Type": "application/json" }
     }))).toThrowError(HttpError);
   });
 });
@@ -192,11 +239,15 @@ describe("private mutation resource guards", () => {
     expect(key).toBe("user-1:private-mutation");
   });
 
-  it("rate-limits verified decision identities before user synchronization", async () => {
+  it.each([
+    { method: "PUT", pathname: "/api/private/decisions/photo-1" },
+    { method: "DELETE", pathname: "/api/private/decisions/photo-1" },
+    { method: "POST", pathname: "/api/private/decisions/photo-1/undo" }
+  ])("rate-limits verified $method decision identities before user synchronization", async ({ method, pathname }) => {
     let decisionKey = "";
     await enforcePrivateRequestRate(
-      new Request("https://logjam.shmol.cc/api/private/decisions/photo-1", {
-        method: "PUT",
+      new Request(`https://logjam.shmol.cc${pathname}`, {
+        method,
         headers: { Origin: "https://logjam.shmol.cc", "Content-Type": "application/json" },
         body: "{}"
       }),
@@ -208,10 +259,119 @@ describe("private mutation resource guards", () => {
           }
         }
       }),
-      new URL("https://logjam.shmol.cc/api/private/decisions/photo-1"),
+      new URL(`https://logjam.shmol.cc${pathname}`),
       "verified-access-sub"
     );
     expect(decisionKey).toBe("verified-access-sub:decision");
+  });
+
+  it("routes an invited same-origin conditional undo", async () => {
+    const response = await worker.fetch(
+      new Request("http://localhost/api/private/decisions/photo-1/undo", {
+        method: "POST",
+        headers: { Origin: "http://localhost", "Content-Type": "application/json" },
+        body: JSON.stringify({ expectedUpdatedAt: "current-version", previousDecision: null })
+      }),
+      env({
+        DB: decisionRouteDb(true),
+        RUNTIME_ENV: "local",
+        ACCESS_ENABLED: "false",
+        LOCAL_AUTH_BYPASS: "true",
+        LOCAL_AUTH_USER_ID: "local-user",
+        LOCAL_AUTH_EMAIL: "friend@example.test"
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    await expect(response.json()).resolves.toEqual({ decision: null });
+  });
+
+  it("returns a conflict when conditional undo no longer matches", async () => {
+    const response = await worker.fetch(
+      new Request("http://localhost/api/private/decisions/photo-1/undo", {
+        method: "POST",
+        headers: { Origin: "http://localhost", "Content-Type": "application/json" },
+        body: JSON.stringify({ expectedUpdatedAt: "stale-version", previousDecision: null })
+      }),
+      env({
+        DB: decisionRouteDb(false),
+        RUNTIME_ENV: "local",
+        ACCESS_ENABLED: "false",
+        LOCAL_AUTH_BYPASS: "true",
+        LOCAL_AUTH_USER_ID: "local-user",
+        LOCAL_AUTH_EMAIL: "friend@example.test"
+      })
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "decision_conflict" }
+    });
+  });
+
+  it("rejects malformed conditional undo bodies", async () => {
+    const response = await worker.fetch(
+      new Request("http://localhost/api/private/decisions/photo-1/undo", {
+        method: "POST",
+        headers: { Origin: "http://localhost", "Content-Type": "application/json" },
+        body: JSON.stringify({ expectedUpdatedAt: "", previousDecision: "maybe" })
+      }),
+      env({
+        DB: decisionRouteDb(true),
+        RUNTIME_ENV: "local",
+        ACCESS_ENABLED: "false",
+        LOCAL_AUTH_BYPASS: "true",
+        LOCAL_AUTH_USER_ID: "local-user",
+        LOCAL_AUTH_EMAIL: "friend@example.test"
+      })
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "invalid_decision_version" }
+    });
+  });
+
+  it("routes an invited same-origin DELETE and returns an idempotent result", async () => {
+    const response = await worker.fetch(
+      new Request("http://localhost/api/private/decisions/photo-1", {
+        method: "DELETE",
+        headers: { Origin: "http://localhost", "Content-Type": "application/json" }
+      }),
+      env({
+        DB: decisionRouteDb(true),
+        RUNTIME_ENV: "local",
+        ACCESS_ENABLED: "false",
+        LOCAL_AUTH_BYPASS: "true",
+        LOCAL_AUTH_USER_ID: "local-user",
+        LOCAL_AUTH_EMAIL: "friend@example.test"
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    await expect(response.json()).resolves.toEqual({
+      decision: { photoId: "photo-1", deleted: true }
+    });
+
+    const retry = await worker.fetch(
+      new Request("http://localhost/api/private/decisions/photo-1", {
+        method: "DELETE",
+        headers: { Origin: "http://localhost", "Content-Type": "application/json" }
+      }),
+      env({
+        DB: decisionRouteDb(false),
+        RUNTIME_ENV: "local",
+        ACCESS_ENABLED: "false",
+        LOCAL_AUTH_BYPASS: "true",
+        LOCAL_AUTH_USER_ID: "local-user",
+        LOCAL_AUTH_EMAIL: "friend@example.test"
+      })
+    );
+    await expect(retry.json()).resolves.toEqual({
+      decision: { photoId: "photo-1", deleted: false }
+    });
   });
 
   it("rejects a streamed body by UTF-8 byte size without Content-Length", async () => {

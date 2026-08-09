@@ -13,7 +13,16 @@ import {
   logjamAdminMutationSchema as serverLogjamAdminMutationSchema,
   validateLogjamAdminMutationRequest
 } from "@/server/cloudflare/logjam-admin-contract";
-import { submitCuration } from "../logjam/worker/repository";
+import {
+  deleteDecision,
+  listAlbumDecisionProgress,
+  putDecision,
+  readAccount,
+  readCuration,
+  submitCuration,
+  undoDecision
+} from "../logjam/worker/repository";
+import { HttpError } from "../logjam/worker/http";
 
 const timestamp = "2026-08-05T12:00:00.000Z";
 
@@ -163,6 +172,399 @@ test("LogJam decisions are global per user and canonical photo", () => {
     ]);
     const columns = fixture.sqlite.prepare("PRAGMA table_info(logjam_decisions)").all();
     assert.equal(columns.some((column) => column.name === "album_id"), false);
+  } finally {
+    fixture.sqlite.close();
+  }
+});
+
+test("LogJam album progress is private, published-only, and follows decision changes", async () => {
+  const fixture = createFixture();
+  try {
+    fixture.sqlite.prepare(`
+      INSERT INTO archive_albums (
+        id, slug, title, status, is_demo, public_download_policy,
+        sort_order, created_at, updated_at, published_at
+      ) VALUES
+        ('album-one', 'album-one', 'Album one', 'published', 0, 'none', 1, ?, ?, ?),
+        ('album-two', 'album-two', 'Album two', 'published', 0, 'none', 2, ?, ?, ?),
+        ('album-empty', 'album-empty', 'Empty', 'published', 0, 'none', 3, ?, ?, ?),
+        ('album-hidden', 'album-hidden', 'Hidden', 'hidden', 0, 'none', 4, ?, ?, NULL)
+    `).run(
+      timestamp, timestamp, timestamp,
+      timestamp, timestamp, timestamp,
+      timestamp, timestamp, timestamp,
+      timestamp, timestamp
+    );
+    fixture.sqlite.prepare(`
+      INSERT INTO archive_photos (
+        id, slug, title, description, status, width, height, dominant_color, created_at, updated_at
+      ) VALUES ('photo-no-web', 'photo-no-web', 'No web tiers', '', 'published', 2000, 1333, '#111111', ?, ?)
+    `).run(timestamp, timestamp);
+    fixture.sqlite.prepare(`
+      INSERT INTO album_photos (album_id, photo_id, position, created_at)
+      VALUES
+        ('album-one', 'photo-1', 0, ?),
+        ('album-one', 'photo-2', 1, ?),
+        ('album-one', 'photo-3', 2, ?),
+        ('album-one', 'photo-no-web', 3, ?),
+        ('album-two', 'photo-1', 0, ?),
+        ('album-hidden', 'photo-1', 0, ?)
+    `).run(timestamp, timestamp, timestamp, timestamp, timestamp, timestamp);
+    fixture.sqlite.prepare(`
+      INSERT INTO logjam_decisions (user_id, photo_id, decision, created_at, updated_at)
+      VALUES
+        ('user-1', 'photo-1', 'keep', ?, ?),
+        ('user-1', 'photo-2', 'pass', ?, ?),
+        ('user-2', 'photo-1', 'pass', ?, ?)
+    `).run(timestamp, timestamp, timestamp, timestamp, timestamp, timestamp);
+
+    assert.deepEqual(await listAlbumDecisionProgress(fixture.d1, "user-1"), [
+      { albumId: "album-one", keptCount: 1, passedCount: 1, totalCount: 2 },
+      { albumId: "album-two", keptCount: 1, passedCount: 0, totalCount: 1 }
+    ]);
+    const account = await readAccount(fixture.d1, {
+      id: "user-1",
+      email: "friend@example.com",
+      displayName: "Friend"
+    });
+    assert.equal(
+      account.keptPhotos.find((photo) => photo.id === "photo-1")?.sourceAlbumTitle,
+      "Album one · Album two"
+    );
+
+    fixture.sqlite.prepare(`
+      UPDATE logjam_decisions SET decision = 'pass', updated_at = ?
+      WHERE user_id = 'user-1' AND photo_id = 'photo-1'
+    `).run("2026-08-05T12:10:00.000Z");
+    assert.deepEqual(await listAlbumDecisionProgress(fixture.d1, "user-1"), [
+      { albumId: "album-one", keptCount: 0, passedCount: 2, totalCount: 2 },
+      { albumId: "album-two", keptCount: 0, passedCount: 1, totalCount: 1 }
+    ]);
+  } finally {
+    fixture.sqlite.close();
+  }
+});
+
+test("passing a photo prunes editable curations but preserves locked source membership", async () => {
+  const fixture = createFixture();
+  try {
+    fixture.sqlite.prepare(`
+      INSERT INTO archive_albums (
+        id, slug, title, status, is_demo, public_download_policy,
+        sort_order, created_at, updated_at, published_at
+      ) VALUES ('source-album', 'source-album', 'Source album', 'published', 0, 'none', 0, ?, ?, ?)
+    `).run(timestamp, timestamp, timestamp);
+    fixture.sqlite.prepare(`
+      INSERT INTO album_photos (album_id, photo_id, position, created_at)
+      VALUES ('source-album', 'photo-1', 0, ?), ('source-album', 'photo-2', 1, ?)
+    `).run(timestamp, timestamp);
+    fixture.sqlite.prepare(`
+      INSERT INTO logjam_decisions (user_id, photo_id, decision, created_at, updated_at)
+      VALUES ('user-1', 'photo-1', 'keep', ?, ?)
+    `).run(timestamp, timestamp);
+    fixture.sqlite.prepare(`
+      INSERT INTO logjam_curations (id, user_id, title, status, revision, created_at, updated_at)
+      VALUES ('curation-mutable', 'user-1', 'Mutable selection', 'active', 1, ?, ?)
+    `).run(timestamp, timestamp);
+    fixture.sqlite.prepare(`
+      INSERT INTO logjam_curation_items (curation_id, photo_id, position, created_at)
+      VALUES ('curation-mutable', 'photo-1', 0, ?)
+    `).run(timestamp);
+    fixture.sqlite.prepare(`
+      UPDATE logjam_submissions
+      SET promoted_album_id = 'source-album', promoted_at = ?
+      WHERE id = 'submission-1'
+    `).run(timestamp);
+    assert.ok(fixture.sqlite.prepare(`
+      SELECT source_locked_at FROM logjam_submissions WHERE id = 'submission-1'
+    `).get()?.source_locked_at);
+
+    await putDecision(fixture.d1, "user-1", "photo-1", "pass");
+
+    assert.equal(
+      scalarNumber(fixture.sqlite, "SELECT COUNT(*) AS value FROM logjam_curation_items WHERE curation_id = 'curation-mutable'"),
+      0
+    );
+    assert.equal(
+      scalarNumber(fixture.sqlite, "SELECT revision AS value FROM logjam_curations WHERE id = 'curation-mutable'"),
+      2
+    );
+    assert.equal(
+      scalarNumber(fixture.sqlite, "SELECT COUNT(*) AS value FROM logjam_curation_items WHERE curation_id = 'curation-1'"),
+      2
+    );
+    assert.deepEqual((await readCuration(fixture.d1, "user-1", "curation-1")).photos.map((photo) => photo.id), [
+      "photo-1",
+      "photo-2"
+    ]);
+  } finally {
+    fixture.sqlite.close();
+  }
+});
+
+test("deleting a decision is user-scoped, idempotent, and reconciles mutable curations", async () => {
+  const fixture = createFixture();
+  try {
+    fixture.sqlite.prepare(`
+      INSERT INTO archive_albums (
+        id, slug, title, status, is_demo, public_download_policy,
+        sort_order, created_at, updated_at, published_at
+      ) VALUES ('source-album', 'source-album', 'Source album', 'published', 0, 'none', 0, ?, ?, ?)
+    `).run(timestamp, timestamp, timestamp);
+    fixture.sqlite.prepare(`
+      INSERT INTO album_photos (album_id, photo_id, position, created_at)
+      VALUES ('source-album', 'photo-1', 0, ?), ('source-album', 'photo-2', 1, ?)
+    `).run(timestamp, timestamp);
+    fixture.sqlite.prepare(`
+      INSERT INTO logjam_decisions (user_id, photo_id, decision, created_at, updated_at)
+      VALUES
+        ('user-1', 'photo-1', 'keep', ?, ?),
+        ('user-2', 'photo-1', 'pass', ?, ?)
+    `).run(timestamp, timestamp, timestamp, timestamp);
+    fixture.sqlite.prepare(`
+      INSERT INTO logjam_curations (id, user_id, title, status, revision, created_at, updated_at)
+      VALUES
+        ('curation-mutable-a', 'user-1', 'Mutable A', 'active', 2, ?, ?),
+        ('curation-mutable-b', 'user-1', 'Mutable B', 'active', 7, ?, ?),
+        ('curation-archived', 'user-1', 'Archived', 'archived', 4, ?, ?),
+        ('curation-other-user', 'user-2', 'Other user', 'active', 3, ?, ?),
+        ('curation-no-decision', 'user-1', 'No decision', 'active', 10, ?, ?)
+    `).run(
+      timestamp, timestamp,
+      timestamp, timestamp,
+      timestamp, timestamp,
+      timestamp, timestamp,
+      timestamp, timestamp
+    );
+    fixture.sqlite.prepare(`
+      INSERT INTO logjam_curation_items (curation_id, photo_id, position, created_at)
+      VALUES
+        ('curation-mutable-a', 'photo-1', 0, ?),
+        ('curation-mutable-b', 'photo-1', 0, ?),
+        ('curation-archived', 'photo-1', 0, ?),
+        ('curation-other-user', 'photo-1', 0, ?),
+        ('curation-no-decision', 'photo-2', 0, ?)
+    `).run(timestamp, timestamp, timestamp, timestamp, timestamp);
+    fixture.sqlite.prepare(`
+      UPDATE logjam_submissions
+      SET promoted_album_id = 'source-album', promoted_at = ?
+      WHERE id = 'submission-1'
+    `).run(timestamp);
+    assert.ok(fixture.sqlite.prepare(`
+      SELECT source_locked_at FROM logjam_submissions WHERE id = 'submission-1'
+    `).get()?.source_locked_at);
+
+    assert.deepEqual(await deleteDecision(fixture.d1, "user-1", "photo-1"), {
+      photoId: "photo-1",
+      deleted: true
+    });
+    assert.equal(
+      scalarNumber(fixture.sqlite, `
+        SELECT COUNT(*) AS value FROM logjam_decisions
+        WHERE user_id = 'user-1' AND photo_id = 'photo-1'
+      `),
+      0
+    );
+    assert.equal(
+      scalarNumber(fixture.sqlite, `
+        SELECT COUNT(*) AS value FROM logjam_decisions
+        WHERE user_id = 'user-2' AND photo_id = 'photo-1' AND decision = 'pass'
+      `),
+      1
+    );
+    assert.deepEqual(fixture.sqlite.prepare(`
+      SELECT id, revision FROM logjam_curations
+      WHERE id IN ('curation-mutable-a', 'curation-mutable-b')
+      ORDER BY id
+    `).all().map((row) => ({ ...row })), [
+      { id: "curation-mutable-a", revision: 3 },
+      { id: "curation-mutable-b", revision: 8 }
+    ]);
+    assert.equal(
+      scalarNumber(fixture.sqlite, `
+        SELECT COUNT(*) AS value FROM logjam_curation_items
+        WHERE curation_id IN ('curation-mutable-a', 'curation-mutable-b')
+      `),
+      0
+    );
+    for (const [curationId, revision] of [
+      ["curation-1", 1],
+      ["curation-archived", 4],
+      ["curation-other-user", 3]
+    ] as const) {
+      assert.equal(
+        scalarNumber(fixture.sqlite, "SELECT revision AS value FROM logjam_curations WHERE id = ?", curationId),
+        revision
+      );
+      assert.equal(
+        scalarNumber(fixture.sqlite, "SELECT COUNT(*) AS value FROM logjam_curation_items WHERE curation_id = ? AND photo_id = 'photo-1'", curationId),
+        1
+      );
+    }
+
+    assert.deepEqual(await deleteDecision(fixture.d1, "user-1", "photo-1"), {
+      photoId: "photo-1",
+      deleted: false
+    });
+    assert.deepEqual(await deleteDecision(fixture.d1, "user-1", "photo-2"), {
+      photoId: "photo-2",
+      deleted: false
+    });
+    assert.equal(
+      scalarNumber(fixture.sqlite, "SELECT revision AS value FROM logjam_curations WHERE id = 'curation-no-decision'"),
+      10
+    );
+    assert.equal(
+      scalarNumber(fixture.sqlite, "SELECT COUNT(*) AS value FROM logjam_curation_items WHERE curation_id = 'curation-no-decision'"),
+      1
+    );
+  } finally {
+    fixture.sqlite.close();
+  }
+});
+
+test("undo compares the current decision version atomically and remains user-scoped", async () => {
+  const fixture = createFixture();
+  try {
+    fixture.sqlite.prepare(`
+      INSERT INTO archive_albums (
+        id, slug, title, status, is_demo, public_download_policy,
+        sort_order, created_at, updated_at, published_at
+      ) VALUES ('undo-album', 'undo-album', 'Undo album', 'published', 0, 'none', 0, ?, ?, ?)
+    `).run(timestamp, timestamp, timestamp);
+    fixture.sqlite.prepare(`
+      INSERT INTO album_photos (album_id, photo_id, position, created_at)
+      VALUES ('undo-album', 'photo-1', 0, ?)
+    `).run(timestamp);
+    fixture.sqlite.prepare(`
+      INSERT INTO logjam_decisions (user_id, photo_id, decision, created_at, updated_at)
+      VALUES
+        ('user-1', 'photo-1', 'keep', ?, 'version-user-1'),
+        ('user-2', 'photo-1', 'pass', ?, 'version-user-2')
+    `).run(timestamp, timestamp);
+    fixture.sqlite.prepare(`
+      INSERT INTO logjam_curations (id, user_id, title, status, revision, created_at, updated_at)
+      VALUES
+        ('curation-undo', 'user-1', 'Undo selection', 'active', 4, ?, ?),
+        ('curation-undo-other', 'user-2', 'Other selection', 'active', 8, ?, ?)
+    `).run(timestamp, timestamp, timestamp, timestamp);
+    fixture.sqlite.prepare(`
+      INSERT INTO logjam_curation_items (curation_id, photo_id, position, created_at)
+      VALUES
+        ('curation-undo', 'photo-1', 0, ?),
+        ('curation-undo-other', 'photo-1', 0, ?)
+    `).run(timestamp, timestamp);
+
+    await assert.rejects(
+      undoDecision(fixture.d1, "user-1", "photo-1", "version-user-2", null),
+      (error: unknown) => error instanceof HttpError && error.status === 409 && error.code === "decision_conflict"
+    );
+    assert.deepEqual(fixture.sqlite.prepare(`
+      SELECT user_id, decision, updated_at FROM logjam_decisions
+      WHERE photo_id = 'photo-1' ORDER BY user_id
+    `).all().map((row) => ({ ...row })), [
+      { user_id: "user-1", decision: "keep", updated_at: "version-user-1" },
+      { user_id: "user-2", decision: "pass", updated_at: "version-user-2" }
+    ]);
+    assert.equal(
+      scalarNumber(fixture.sqlite, "SELECT revision AS value FROM logjam_curations WHERE id = 'curation-undo'"),
+      4
+    );
+    assert.equal(
+      scalarNumber(fixture.sqlite, "SELECT COUNT(*) AS value FROM logjam_curation_items WHERE curation_id = 'curation-undo'"),
+      1
+    );
+
+    const result = await undoDecision(fixture.d1, "user-1", "photo-1", "version-user-1", null);
+    assert.equal(result, null);
+    assert.equal(
+      scalarNumber(fixture.sqlite, "SELECT COUNT(*) AS value FROM logjam_decisions WHERE user_id = 'user-1' AND photo_id = 'photo-1'"),
+      0
+    );
+    assert.equal(
+      scalarNumber(fixture.sqlite, "SELECT COUNT(*) AS value FROM logjam_decisions WHERE user_id = 'user-2' AND photo_id = 'photo-1'"),
+      1
+    );
+    assert.equal(
+      scalarNumber(fixture.sqlite, "SELECT revision AS value FROM logjam_curations WHERE id = 'curation-undo'"),
+      5
+    );
+    assert.equal(
+      scalarNumber(fixture.sqlite, "SELECT COUNT(*) AS value FROM logjam_curation_items WHERE curation_id = 'curation-undo'"),
+      0
+    );
+    assert.equal(
+      scalarNumber(fixture.sqlite, "SELECT revision AS value FROM logjam_curations WHERE id = 'curation-undo-other'"),
+      8
+    );
+    assert.equal(
+      scalarNumber(fixture.sqlite, "SELECT COUNT(*) AS value FROM logjam_curation_items WHERE curation_id = 'curation-undo-other'"),
+      1
+    );
+
+    fixture.sqlite.prepare(`
+      INSERT INTO logjam_decisions (user_id, photo_id, decision, created_at, updated_at)
+      VALUES ('user-1', 'photo-1', 'keep', ?, 'version-to-restore')
+    `).run(timestamp);
+    fixture.sqlite.prepare(`
+      INSERT INTO logjam_curation_items (curation_id, photo_id, position, created_at)
+      VALUES ('curation-undo', 'photo-1', 0, ?)
+    `).run(timestamp);
+    const restored = await undoDecision(
+      fixture.d1,
+      "user-1",
+      "photo-1",
+      "version-to-restore",
+      "pass"
+    );
+    assert.equal(restored?.photoId, "photo-1");
+    assert.equal(restored?.decision, "pass");
+    assert.match(restored?.updatedAt ?? "", /^\d{4}-\d{2}-\d{2}T.+Z~[0-9a-f-]{36}$/);
+    assert.notEqual(restored?.updatedAt, "version-to-restore");
+    assert.deepEqual({ ...fixture.sqlite.prepare(`
+      SELECT decision, updated_at FROM logjam_decisions
+      WHERE user_id = 'user-1' AND photo_id = 'photo-1'
+    `).get() }, { decision: "pass", updated_at: restored?.updatedAt });
+    assert.equal(
+      scalarNumber(fixture.sqlite, "SELECT revision AS value FROM logjam_curations WHERE id = 'curation-undo'"),
+      6
+    );
+    assert.equal(
+      scalarNumber(fixture.sqlite, "SELECT COUNT(*) AS value FROM logjam_curation_items WHERE curation_id = 'curation-undo'"),
+      0
+    );
+    await assert.rejects(
+      undoDecision(fixture.d1, "user-1", "photo-1", "version-to-restore", "keep"),
+      (error: unknown) => error instanceof HttpError && error.status === 409 && error.code === "decision_conflict"
+    );
+  } finally {
+    fixture.sqlite.close();
+  }
+});
+
+test("undo rejects a decision replaced immediately before its D1 batch", async () => {
+  const fixture = createFixture();
+  try {
+    fixture.sqlite.prepare(`
+      INSERT INTO logjam_decisions (user_id, photo_id, decision, created_at, updated_at)
+      VALUES ('user-1', 'photo-1', 'keep', ?, 'original-version')
+    `).run(timestamp);
+    fixture.adapter.beforeNextBatch(() => {
+      fixture.sqlite.prepare(`
+        UPDATE logjam_decisions
+        SET decision = 'pass', updated_at = 'newer-version'
+        WHERE user_id = 'user-1' AND photo_id = 'photo-1'
+      `).run();
+    });
+
+    await assert.rejects(
+      undoDecision(fixture.d1, "user-1", "photo-1", "original-version", null),
+      (error: unknown) => error instanceof HttpError && error.status === 409 && error.code === "decision_conflict"
+    );
+    assert.deepEqual({ ...fixture.sqlite.prepare(`
+      SELECT decision, updated_at FROM logjam_decisions
+      WHERE user_id = 'user-1' AND photo_id = 'photo-1'
+    `).get() }, { decision: "pass", updated_at: "newer-version" });
   } finally {
     fixture.sqlite.close();
   }

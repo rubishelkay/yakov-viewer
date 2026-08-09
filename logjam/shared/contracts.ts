@@ -9,6 +9,13 @@ export type AlbumSummary = {
   photoCount: number;
 };
 
+export type AlbumDecisionProgress = {
+  albumId: string;
+  keptCount: number;
+  passedCount: number;
+  totalCount: number;
+};
+
 export type PublicPhoto = {
   id: string;
   slug: string;
@@ -17,6 +24,10 @@ export type PublicPhoto = {
   height: number;
   thumbUrl: string;
   displayUrl: string;
+};
+
+export type AccountPhoto = PublicPhoto & {
+  sourceAlbumTitle: string;
 };
 
 export type AlbumDetail = AlbumSummary & {
@@ -33,7 +44,22 @@ export type Viewer = {
 export type DecisionRecord = {
   photoId: string;
   decision: DecisionValue;
+  /** Opaque, time-prefixed mutation token; compare exactly rather than parsing it. */
   updatedAt: string;
+};
+
+export type DecisionDeletionRecord = {
+  photoId: string;
+  deleted: boolean;
+};
+
+export type DecisionUndoRequest = {
+  expectedUpdatedAt: string;
+  previousDecision: DecisionValue | null;
+};
+
+export type DecisionUndoResult = {
+  decision: DecisionRecord | null;
 };
 
 export type CurationSummary = {
@@ -63,8 +89,8 @@ export type AccountPayload = {
   viewer: Viewer;
   decisions: DecisionRecord[];
   curations: CurationSummary[];
-  keptPhotos: PublicPhoto[];
-  passedPhotos: PublicPhoto[];
+  keptPhotos: AccountPhoto[];
+  passedPhotos: AccountPhoto[];
 };
 
 export type PendingDecision = {

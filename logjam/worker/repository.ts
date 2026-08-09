@@ -1,9 +1,12 @@
 import type {
+  AccountPhoto,
   AccountPayload,
+  AlbumDecisionProgress,
   AlbumDetail,
   AlbumSummary,
   CurationDetail,
   CurationSummary,
+  DecisionDeletionRecord,
   DecisionRecord,
   DecisionValue,
   PublicPhoto,
@@ -37,6 +40,17 @@ type PhotoRow = {
   height: number;
   thumb_url: string | null;
   display_url: string | null;
+};
+
+type AccountPhotoRow = PhotoRow & {
+  source_album_title: string;
+};
+
+type AlbumDecisionProgressRow = {
+  album_id: string;
+  kept_count: number;
+  passed_count: number;
+  total_count: number;
 };
 
 type CurationRow = {
@@ -164,6 +178,50 @@ export async function listPublicAlbums(db: D1Database): Promise<AlbumSummary[]> 
   return rows<AlbumRow>(result).map(mapAlbum);
 }
 
+export async function listAlbumDecisionProgress(
+  db: D1Database,
+  userId: string
+): Promise<AlbumDecisionProgress[]> {
+  const result = await db.prepare(`
+    SELECT
+      a.id AS album_id,
+      COUNT(*) AS total_count,
+      SUM(CASE WHEN d.decision = 'keep' THEN 1 ELSE 0 END) AS kept_count,
+      SUM(CASE WHEN d.decision = 'pass' THEN 1 ELSE 0 END) AS passed_count
+    FROM archive_albums a
+    JOIN album_photos ap ON ap.album_id = a.id
+    JOIN archive_photos p ON p.id = ap.photo_id
+    LEFT JOIN logjam_decisions d
+      ON d.user_id = ?
+      AND d.photo_id = p.id
+    WHERE a.status = 'published'
+      AND p.status = 'published'
+      AND EXISTS (
+        SELECT 1 FROM archive_assets display_asset
+        WHERE display_asset.photo_id = p.id
+          AND display_asset.version = 'display'
+          AND display_asset.access = 'public'
+          AND display_asset.public_url IS NOT NULL
+      )
+      AND EXISTS (
+        SELECT 1 FROM archive_assets thumb_asset
+        WHERE thumb_asset.photo_id = p.id
+          AND thumb_asset.version = 'thumb'
+          AND thumb_asset.access = 'public'
+          AND thumb_asset.public_url IS NOT NULL
+      )
+    GROUP BY a.id
+    ORDER BY a.sort_order, a.created_at, a.id
+  `).bind(userId).all<AlbumDecisionProgressRow>();
+
+  return rows<AlbumDecisionProgressRow>(result).map((row) => ({
+    albumId: row.album_id,
+    keptCount: Number(row.kept_count),
+    passedCount: Number(row.passed_count),
+    totalCount: Number(row.total_count)
+  }));
+}
+
 export async function readPublicAlbum(db: D1Database, slug: string): Promise<AlbumDetail> {
   const album = await db.prepare(`
     SELECT
@@ -259,14 +317,140 @@ export async function putDecision(
     throw new HttpError(404, "photo_not_found", "Published photo not found.");
   }
   const now = new Date().toISOString();
-  await db.prepare(`
+  const updatedAt = decisionUpdatedAt(now);
+  const writeDecision = db.prepare(`
     INSERT INTO logjam_decisions (user_id, photo_id, decision, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?)
     ON CONFLICT(user_id, photo_id) DO UPDATE SET
       decision = excluded.decision,
       updated_at = excluded.updated_at
-  `).bind(userId, photoId, decision, now, now).run();
-  return { photoId, decision, updatedAt: now };
+  `).bind(userId, photoId, decision, now, updatedAt);
+
+  if (decision === "pass") {
+    await db.batch([
+      writeDecision,
+      ...pruneMutableCurationStatements(db, userId, photoId, now)
+    ]);
+  } else {
+    await writeDecision.run();
+  }
+  return { photoId, decision, updatedAt };
+}
+
+export async function deleteDecision(
+  db: D1Database,
+  userId: string,
+  photoId: string
+): Promise<DecisionDeletionRecord> {
+  const now = new Date().toISOString();
+  const results = await db.batch([
+    ...pruneMutableCurationStatements(db, userId, photoId, now),
+    db.prepare(`
+      DELETE FROM logjam_decisions
+      WHERE user_id = ? AND photo_id = ?
+    `).bind(userId, photoId)
+  ]);
+  return {
+    photoId,
+    deleted: (results.at(-1)?.meta.changes ?? 0) === 1
+  };
+}
+
+export async function undoDecision(
+  db: D1Database,
+  userId: string,
+  photoId: string,
+  expectedUpdatedAt: string,
+  previousDecision: DecisionValue | null
+): Promise<DecisionRecord | null> {
+  const now = new Date().toISOString();
+  const updatedAt = decisionUpdatedAt(now);
+  const reconcile = previousDecision === "keep"
+    ? []
+    : pruneMutableCurationStatements(db, userId, photoId, now, expectedUpdatedAt);
+  const restore = previousDecision === null
+    ? db.prepare(`
+        DELETE FROM logjam_decisions
+        WHERE user_id = ? AND photo_id = ? AND updated_at = ?
+      `).bind(userId, photoId, expectedUpdatedAt)
+    : db.prepare(`
+        UPDATE logjam_decisions
+        SET decision = ?, updated_at = ?
+        WHERE user_id = ? AND photo_id = ? AND updated_at = ?
+      `).bind(previousDecision, updatedAt, userId, photoId, expectedUpdatedAt);
+
+  // D1 batches execute sequentially in a single transaction. Every reconciliation
+  // statement carries the same compare guard, so a stale undo is a complete no-op.
+  const results = await db.batch([...reconcile, restore]);
+  if ((results.at(-1)?.meta.changes ?? 0) !== 1) {
+    throw new HttpError(
+      409,
+      "decision_conflict",
+      "The decision changed in another tab. Reload and try again."
+    );
+  }
+
+  return previousDecision === null
+    ? null
+    : { photoId, decision: previousDecision, updatedAt };
+}
+
+function pruneMutableCurationStatements(
+  db: D1Database,
+  userId: string,
+  photoId: string,
+  now: string,
+  expectedUpdatedAt?: string
+): D1PreparedStatement[] {
+  const expected = expectedUpdatedAt ?? null;
+  return [
+    db.prepare(`
+      UPDATE logjam_curations
+      SET revision = revision + 1, updated_at = ?
+      WHERE user_id = ?
+        AND status = 'active'
+        AND EXISTS (
+          SELECT 1 FROM logjam_decisions existing_decision
+          WHERE existing_decision.user_id = ? AND existing_decision.photo_id = ?
+            AND (? IS NULL OR existing_decision.updated_at = ?)
+        )
+        AND EXISTS (
+          SELECT 1 FROM logjam_curation_items item
+          WHERE item.curation_id = logjam_curations.id AND item.photo_id = ?
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM logjam_submissions lock_submission
+          WHERE lock_submission.curation_id = logjam_curations.id
+            AND lock_submission.source_locked_at IS NOT NULL
+        )
+    `).bind(now, userId, userId, photoId, expected, expected, photoId),
+    db.prepare(`
+      DELETE FROM logjam_curation_items
+      WHERE photo_id = ?
+        AND EXISTS (
+          SELECT 1 FROM logjam_decisions existing_decision
+          WHERE existing_decision.user_id = ? AND existing_decision.photo_id = ?
+            AND (? IS NULL OR existing_decision.updated_at = ?)
+        )
+        AND curation_id IN (
+          SELECT c.id
+          FROM logjam_curations c
+          WHERE c.user_id = ?
+            AND c.status = 'active'
+            AND NOT EXISTS (
+              SELECT 1 FROM logjam_submissions lock_submission
+              WHERE lock_submission.curation_id = c.id
+                AND lock_submission.source_locked_at IS NOT NULL
+            )
+        )
+    `).bind(photoId, userId, photoId, expected, expected, userId)
+  ];
+}
+
+function decisionUpdatedAt(now: string): string {
+  // The timestamp prefix keeps account ordering useful; the UUID makes this an
+  // unambiguous compare token even when separate Worker requests share a millisecond.
+  return `${now}~${crypto.randomUUID()}`;
 }
 
 export async function readAccount(db: D1Database, user: AppUser): Promise<AccountPayload> {
@@ -300,8 +484,8 @@ export async function readAccount(db: D1Database, user: AppUser): Promise<Accoun
       const value = row as { photo_id: string; decision: DecisionValue; updated_at: string };
       return { photoId: value.photo_id, decision: value.decision, updatedAt: value.updated_at };
     }),
-    keptPhotos: rows<PhotoRow>(keptResult).flatMap((row) => mapPhoto(row) ?? []),
-    passedPhotos: rows<PhotoRow>(passedResult).flatMap((row) => mapPhoto(row) ?? []),
+    keptPhotos: rows<AccountPhotoRow>(keptResult).flatMap((row) => mapAccountPhoto(row) ?? []),
+    passedPhotos: rows<AccountPhotoRow>(passedResult).flatMap((row) => mapAccountPhoto(row) ?? []),
     curations: rows<CurationRow>(curationResult).map(mapCuration)
   };
 }
@@ -336,13 +520,24 @@ export async function readCuration(
     db.prepare(`
       SELECT ${publicPhotoColumns}, ci.position
       FROM logjam_curation_items ci
+      JOIN logjam_curations owner_curation
+        ON owner_curation.id = ci.curation_id
+        AND owner_curation.user_id = ?
       JOIN archive_photos p ON p.id = ci.photo_id
-      JOIN logjam_decisions current_decision
-        ON current_decision.user_id = ?
+      LEFT JOIN logjam_decisions current_decision
+        ON current_decision.user_id = owner_curation.user_id
         AND current_decision.photo_id = ci.photo_id
-        AND current_decision.decision = 'keep'
       WHERE ci.curation_id = ?
         AND p.status = 'published'
+        AND (
+          current_decision.decision = 'keep'
+          OR owner_curation.status = 'archived'
+          OR EXISTS (
+            SELECT 1 FROM logjam_submissions lock_submission
+            WHERE lock_submission.curation_id = owner_curation.id
+              AND lock_submission.source_locked_at IS NOT NULL
+          )
+        )
         AND EXISTS (
           SELECT 1 FROM album_photos ap
           JOIN archive_albums a ON a.id = ap.album_id
@@ -847,7 +1042,19 @@ async function requireKeptPublishedPhotos(
 
 function decisionPhotosStatement(db: D1Database, userId: string, decision: DecisionValue) {
   return db.prepare(`
-    SELECT ${publicPhotoColumns}, d.updated_at
+    SELECT
+      ${publicPhotoColumns},
+      d.updated_at,
+      (
+        SELECT GROUP_CONCAT(source_album.title, ' · ')
+        FROM (
+          SELECT a.title
+          FROM album_photos ap
+          JOIN archive_albums a ON a.id = ap.album_id
+          WHERE ap.photo_id = p.id AND a.status = 'published'
+          ORDER BY a.sort_order, a.created_at, a.id
+        ) source_album
+      ) AS source_album_title
     FROM logjam_decisions d
     JOIN archive_photos p ON p.id = d.photo_id
     WHERE d.user_id = ?
@@ -883,6 +1090,15 @@ function mapPhoto(row: PhotoRow): PublicPhoto | null {
     height: Number(row.height),
     thumbUrl: row.thumb_url,
     displayUrl: row.display_url
+  };
+}
+
+function mapAccountPhoto(row: AccountPhotoRow): AccountPhoto | null {
+  const photo = mapPhoto(row);
+  if (!photo) return null;
+  return {
+    ...photo,
+    sourceAlbumTitle: row.source_album_title
   };
 }
 
